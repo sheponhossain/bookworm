@@ -5,9 +5,43 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 // POST: Login User
+// POST: Login User
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user) return res.status(400).json({ message: 'User not found' });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch)
+      return res.status(400).json({ message: 'Invalid credentials' });
+
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET
+    );
+
+    // এখানে অবশ্যই 'role' পাঠাতে হবে
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role, // এটি চেক করুন
+        photoURL: user.photoURL,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST: Register a new user
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, photoURL, role } = req.body; // নতুন ফিল্ডগুলো রিসিভ করা হচ্ছে
+    const { name, email, password, photoURL, role } = req.body; // নিশ্চিত করুন role এখানে আছে
 
     let user = await User.findOne({ email });
     if (user) return res.status(400).json({ message: 'User already exists' });
@@ -19,46 +53,14 @@ router.post('/register', async (req, res) => {
       name,
       email,
       password: hashedPassword,
-      photoURL: photoURL || '', // ডেটাবেসে ফটো সেভ করা
-      role: role || 'user', // ডেটাবেসে রোল সেভ করা
+      photoURL: photoURL || '',
+      role: role || 'user', // ফ্রন্টএন্ড থেকে role আসলে সেটি সেভ হবে
     });
 
     await user.save();
     res.status(201).json({ message: 'User registered successfully!' });
   } catch (err) {
-    res.status(500).send('Server error');
-  }
-});
-
-// POST: Register a new user
-router.post('/register', async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-
-    // চেক করা হচ্ছে ইউজার আগে থেকেই আছে কিনা
-    let user = await User.findOne({ email });
-    if (user) {
-      return res.status(400).json({ message: 'User already exists' });
-    }
-
-    // পাসওয়ার্ড হ্যাশ করা (সিকিউরিটির জন্য)
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // নতুন ইউজার তৈরি
-    user = new User({
-      name,
-      email,
-      password: hashedPassword,
-    });
-
-    await user.save();
-    res
-      .status(201)
-      .json({ message: 'User registered successfully! Now you can login.' });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server error during registration');
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
