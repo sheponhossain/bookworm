@@ -1,0 +1,42 @@
+'use client';
+import { createContext, useContext, useState, useEffect } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+
+const AuthContext = createContext();
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    const token = localStorage.getItem('token');
+
+    if (storedUser && token) {
+      setUser(JSON.parse(storedUser));
+    } else {
+      // শুধু লগইন না থাকলে লগইন পেজে পাঠাবে
+      if (!pathname.includes('/auth')) {
+        router.push('/auth/login');
+      }
+    }
+    setLoading(false);
+  }, [pathname]); // এখানে বাড়তি কোনো লজিক রাখবেন না যা রিডাইরেক্ট করে
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+    router.push('/auth/login');
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, setUser, loading, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => useContext(AuthContext);
