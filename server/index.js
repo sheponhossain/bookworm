@@ -17,12 +17,21 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-app.options('*', (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', 'https://book-worm-front-end-orpin.vercel.app');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, user-role');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.sendStatus(200);
+app.use(cors({
+  origin: "https://book-worm-front-end-orpin.vercel.app",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+}));
+
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "https://book-worm-front-end-orpin.vercel.app");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
 });
 app.use(express.json());
 
