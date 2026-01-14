@@ -10,7 +10,7 @@ connectDB();
 
 app.use(
   cors({
-    origin: '',
+    origin: 'https://book-worm-front-end-orpin.vercel.app/auth/login',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'user-role', 'Authorization'],
   })
