@@ -5,7 +5,7 @@ const adminOnly = (req, res, next) => {
   const userRole = req.headers['user-role'];
 
   if (userRole === 'admin') {
-    next(); // রোল অ্যাডমিন হলে কাজ করতে দেবে
+    next();
   } else {
     res.status(403).json({
       message:
@@ -13,5 +13,4 @@ const adminOnly = (req, res, next) => {
     });
   }
 };
-
 module.exports = { adminOnly };

@@ -16,6 +16,8 @@ export default function BrowsePage() {
   const [loading, setLoading] = useState(true);
   const [selectedBook, setSelectedBook] = useState(null);
   const [isReading, setIsReading] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [categories, setCategories] = useState([]);
 
   const [userLibrary, setUserLibrary] = useState({});
   const [recommendations, setRecommendations] = useState({
@@ -33,9 +35,9 @@ export default function BrowsePage() {
       try {
         setLoading(true);
         const resAll = await axios.get('http://localhost:5000/api/books/all');
-        const allBooks = resAll.data?.books || resAll.data || [];
+        const allBooks = resAll.data.books || resAll.data || [];
         setBooks(allBooks);
-
+        console.log('Server Response:', resAll.data);
         // লোকাল স্টোরেজ থেকে ইউজারের বর্তমান লাইব্রেরি স্টেট লোড করা (ডিজাইন ঠিক রাখার জন্য)
         const savedLibrary = {};
         Object.keys(localStorage).forEach((key) => {
@@ -45,7 +47,17 @@ export default function BrowsePage() {
           }
         });
         setUserLibrary(savedLibrary);
-
+        try {
+          const statsRes = await axios.get(
+            'http://localhost:5000/api/books/stats'
+          );
+          if (statsRes.headers['content-type'].includes('application/json')) {
+            setStats(statsRes.data);
+          }
+        } catch (statsErr) {
+          console.log('Stats Not Available 404');
+          setStats({ totalBooks: 0, activeUsers: 0, totalReviews: 0 });
+        }
         if (user?._id) {
           const resRec = await axios.get(
             `http://localhost:5000/api/books/personalized/${user._id}`
@@ -57,7 +69,7 @@ export default function BrowsePage() {
             badge: resRec.data.type === 'Popular' ? 'Top Rated' : 'For You',
           });
         } else {
-          const popular = allBooks.slice(0, 15);
+          const popular = allBooks.slice(0, 6);
           setRecommendations({
             books: popular,
             reason: 'Explore our collection of 70+ masterpieces!',
@@ -154,7 +166,7 @@ export default function BrowsePage() {
           {/* Hero Header - NO CHANGE */}
           <header className="max-w-7xl mx-auto mb-16 text-center">
             <h1 className="text-5xl md:text-7xl font-serif font-bold mb-4 leading-tight">
-              The <span className="italic text-[#C1A88D]">Lumina</span> Gallery
+              The <span className="italic text-[#C1A88D]">Book</span> Gallery
             </h1>
             <p className="text-gray-400 font-medium tracking-widest uppercase text-[10px]">
               Your gateway to timeless literature
@@ -208,14 +220,13 @@ export default function BrowsePage() {
             />
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap gap-2">
-                {genres.map((genre) => (
-                  <button
-                    key={genre}
-                    onClick={() => setSelectedGenre(genre)}
-                    className={`px-5 py-2 rounded-full font-bold text-[10px] uppercase tracking-widest transition-all ${selectedGenre === genre ? 'bg-[#4A3728] text-white' : 'bg-white text-gray-400 border border-[#E5DCC3]'}`}
+                {categories.map((cat, index) => (
+                  <option
+                    key={cat._id ?? `${cat.name}-${index}`}
+                    value={cat.name}
                   >
-                    {genre}
-                  </button>
+                    {cat.name}
+                  </option>
                 ))}
               </div>
             </div>

@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
-import { useState, useEffect, useMemo } from 'react'; // useMemo যুক্ত করা হয়েছে ক্যালকুলেশনের জন্য
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import toast, { Toaster } from 'react-hot-toast';
@@ -11,27 +11,27 @@ export default function MyLibraryPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [savedBooks, setSavedBooks] = useState([]);
+  const [dbStats, setDbStats] = useState({ annualGoal: 50, readingStreak: 0 });
   const [loading, setLoading] = useState(true);
   const [selectedBook, setSelectedBook] = useState(null);
   const [isReading, setIsReading] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   const statusOptions = ['Want to Read', 'Currently Reading', 'Read'];
 
-  // --- DYNAMIC LOGIC STARTS HERE (No design change) ---
   const stats = useMemo(() => {
     const readBooks = savedBooks.filter((b) => b.status === 'Read');
     const currentlyReading = savedBooks.filter(
       (b) => b.status === 'Currently Reading'
     );
 
-    // ডাইনামিক গোল ক্যালকুলেশন
-    const annualGoal = 50;
+    const annualGoal = dbStats.annualGoal || 50;
     const progress = Math.min(
       Math.round((readBooks.length / annualGoal) * 100),
       100
     );
 
-    // ডাইনামিক জেনার (Genre) চার্ট ডাটা
     const genreMap = {};
     savedBooks.forEach((book) => {
       const g = book.category || 'Other';
@@ -42,7 +42,6 @@ export default function MyLibraryPage() {
       value: genreMap[name],
     }));
 
-    // ডাইনামিক পেজ কাউন্ট (গড় ২৫০ পেজ ধরে)
     const totalPages = readBooks.reduce(
       (acc, book) => acc + (book.pageCount || 250),
       0
@@ -55,17 +54,60 @@ export default function MyLibraryPage() {
       genreData,
       totalPages,
       currentCount: currentlyReading.length,
+      streak: dbStats.readingStreak || 0,
     };
-  }, [savedBooks]);
+  }, [savedBooks, dbStats]);
 
   const COLORS = ['#4A3728', '#C1A88D', '#E5DCC3', '#D4C3A3', '#8B735B'];
-  // --- DYNAMIC LOGIC ENDS HERE ---
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/auth/login');
+  // --- API FUNCTIONS ---
+  const fetchStatsFromDB = async () => {
+    if (!user?.email) return;
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/stats/${user.email}`
+      );
+      const data = await res.json();
+      if (data) setDbStats(data);
+    } catch (err) {
+      console.error('Stats fetch error:', err);
     }
-  }, [user, authLoading, router]);
+  };
+
+  // ১. গোল আপডেট করার নতুন ফাংশন (ডিজাইন চেঞ্জ না করে যোগ করা হয়েছে)
+  const handleGoalUpdate = async () => {
+    const newGoal = prompt(
+      'Set your new annual reading goal:',
+      stats.annualGoal
+    );
+    if (newGoal && !isNaN(newGoal)) {
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/stats/update-goal`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: user.email,
+              newGoal: parseInt(newGoal),
+            }),
+          }
+        );
+        if (response.ok) {
+          fetchStatsFromDB();
+          toast.success(`Goal updated to ${newGoal} books!`, {
+            style: {
+              borderRadius: '15px',
+              background: '#4A3728',
+              color: '#fff',
+            },
+          });
+        }
+      } catch (error) {
+        toast.error('Failed to update goal');
+      }
+    }
+  };
 
   const fetchMyLibrary = () => {
     setLoading(true);
@@ -82,8 +124,14 @@ export default function MyLibraryPage() {
   };
 
   useEffect(() => {
-    if (user) fetchMyLibrary();
-  }, [user]);
+    if (!authLoading && !user) {
+      router.push('/auth/login');
+    }
+    if (user) {
+      fetchMyLibrary();
+      //   fetchStatsFromDB();
+    }
+  }, [user, authLoading, router]);
 
   const updateStatus = (id, newStatus) => {
     const updatedBooks = savedBooks.map((book) => {
@@ -140,9 +188,9 @@ export default function MyLibraryPage() {
           book={selectedBook}
           onBack={() => {
             setIsReading(false);
-            fetchMyLibrary();
+            fetchMyLibrary(); // fetch again to reflect updated status
           }}
-          onShelfChange={updateStatus}
+          onShelfChange={updateStatus} // <-- এইটা ReaderView থেকে status আপডেটের জন্য
         />
       )}
 
@@ -164,13 +212,43 @@ export default function MyLibraryPage() {
                 alt="profile"
               />
             )}
+            <div className="w-1/2 md:w-auto">
+              {' '}
+              <button
+                onClick={() => {
+                  router.push('/my-library/analytics');
+                  setShowAnalytics(true);
+                }}
+                className={`w-full p-5 rounded-3xl border flex items-center justify-between group transition-all hover:shadow-lg active:scale-95 ${
+                  isDarkMode
+                    ? 'bg-[#252525] border-gray-800 hover:bg-[#2d2d2d]'
+                    : 'bg-white border-[#E5DCC3] hover:bg-[#FDFBF7]'
+                }`}
+              >
+                <div className="text-left">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-[#C1A88D]">
+                    Stats & Progress
+                  </p>
+                  <p className="text-sm font-bold">View Detailed Insights</p>
+                </div>
+                <span className="text-xl group-hover:translate-x-1 transition-transform">
+                  📈
+                </span>
+              </button>
+            </div>
           </header>
 
-          {/* --- NEW DYNAMIC STATS SECTION --- */}
           <section className="max-w-7xl mx-auto mb-20 grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="bg-white rounded-[40px] p-8 border border-[#E5DCC3] flex flex-col items-center justify-center shadow-sm">
-              <h3 className="text-[10px] font-black uppercase tracking-widest mb-6">
-                2026 Reading Goal
+            {/* গোল কার্ড - এখানে onClick যুক্ত করা হয়েছে */}
+            <div
+              onClick={handleGoalUpdate}
+              className="bg-white rounded-[40px] p-8 border border-[#E5DCC3] flex flex-col items-center justify-center shadow-sm cursor-pointer hover:border-[#C1A88D] transition-all group"
+            >
+              <h3 className="text-[10px] font-black uppercase tracking-widest mb-6 group-hover:text-[#C1A88D]">
+                2026 Reading Goal{' '}
+                <span className="opacity-0 group-hover:opacity-100 ml-2">
+                  ✎
+                </span>
               </h3>
               <div className="relative w-44 h-44">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
@@ -191,7 +269,7 @@ export default function MyLibraryPage() {
                     className="text-[#C1A88D] transition-all duration-1000"
                     strokeWidth="2"
                     strokeDasharray={`${stats.progress}, 100`}
-                    strokeDashcap="round"
+                    strokeLinecap="round"
                     stroke="currentColor"
                   />
                 </svg>
@@ -258,7 +336,11 @@ export default function MyLibraryPage() {
                     value: stats.currentCount,
                     unit: 'books',
                   },
-                  { label: 'Reading Streak', value: '12', unit: 'days' },
+                  {
+                    label: 'Reading Streak',
+                    value: stats.streak,
+                    unit: 'days',
+                  },
                 ].map((item, idx) => (
                   <div
                     key={idx}
@@ -295,7 +377,6 @@ export default function MyLibraryPage() {
                       {booksInShelf.length}
                     </span>
                   </div>
-
                   {booksInShelf.length === 0 ? (
                     <div className="py-10 text-center border-2 border-dashed border-[#E5DCC3] rounded-[40px] italic text-gray-300">
                       No books in this section yet.

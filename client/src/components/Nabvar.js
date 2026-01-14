@@ -14,7 +14,7 @@ export default function Navbar() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
           <h2 className="text-2xl font-serif font-bold tracking-tighter text-[#4A3728]">
-            Lumina<span className="text-[#C1A88D]">Books</span>
+            BOOK<span className="text-[#C1A88D]">WORM</span>
           </h2>
         </Link>
 

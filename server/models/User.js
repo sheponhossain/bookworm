@@ -13,4 +13,14 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+const UserStatsSchema = new mongoose.Schema(
+  {
+    userEmail: { type: String, required: true, unique: true },
+    annualGoal: { type: Number, default: 50 },
+    readingStreak: { type: Number, default: 0 },
+    lastReadDate: { type: Date },
+  },
+  { timestamps: true }
+);
+
 module.exports = mongoose.model('User', userSchema);

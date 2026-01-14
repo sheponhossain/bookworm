@@ -6,7 +6,7 @@ export function Footer() {
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
         <div className="col-span-1 md:col-span-1">
           <h2 className="text-2xl font-serif font-bold text-[#4A3728] mb-4">
-            LuminaBooks
+            BOOKWORM
           </h2>
           <p className="text-gray-400 text-sm leading-relaxed">
             Your personal sanctuary for reading, tracking, and discovering new
@@ -68,7 +68,7 @@ export function Footer() {
 
       <div className="max-w-7xl mx-auto pt-8 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[2px]">
-          © 2026 LuminaBooks Management System. All Rights Reserved.
+          © 2026 BOOKWORM Management System. All Rights Reserved.
         </p>
         <div className="flex gap-6 text-[10px] font-black uppercase tracking-widest text-gray-400">
           <a href="#">Privacy Policy</a>

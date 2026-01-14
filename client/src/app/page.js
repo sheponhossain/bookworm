@@ -24,7 +24,7 @@ export default function HomePage() {
           </h1>
 
           <p className="max-w-lg text-lg text-gray-400 font-medium leading-relaxed">
-            Welcome to LuminaBooks. A sanctuary for seekers of wisdom and
+            Welcome to BOOKWORM. A sanctuary for seekers of wisdom and
             collectors of stories. Explore our curated digital library and build
             your personal sanctuary.
           </p>

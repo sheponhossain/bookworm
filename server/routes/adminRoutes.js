@@ -76,5 +76,26 @@ router.delete('/reviews/:id', async (req, res) => {
     res.status(500).json({ message: 'Delete failed' });
   }
 });
+// ব্যাকএন্ডের বইয়ের রাউট ফাইলে এটি যোগ করুন
+// একটি নির্দিষ্ট বইয়ের সব রিভিউ পাওয়ার রাউট (ReaderView এর জন্য)
+router.get('/:id/reviews', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // বইটির ডাটাবেস থেকে খুঁজে বের করা
+    const book = await Book.findById(id);
+
+    if (!book) {
+      return res.status(404).json({ message: 'Book not found' });
+    }
+
+    // বইয়ের ভেতরে থাকা 'reviews' অ্যারেটি পাঠানো।
+    // যদি কোনো রিভিউ না থাকে তবে খালি অ্যারে [] পাঠাবে।
+    res.json(book.reviews || []);
+  } catch (err) {
+    console.error('Review Fetch Error:', err);
+    res.status(500).json({ message: 'Server Error while fetching reviews' });
+  }
+});
 
 module.exports = router;

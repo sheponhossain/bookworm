@@ -18,6 +18,7 @@ export default function Dashboard() {
   const [showProfile, setShowProfile] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [viewingUser, setViewingUser] = useState(null);
+  // const [genres, setGenres] = useState([]);
 
   // --- DATA STATES ---
   const [books, setBooks] = useState([]);
@@ -30,6 +31,17 @@ export default function Dashboard() {
     totalReviews: 0,
     readingGoal: '80%',
   });
+
+  // --- NEW STATES FOR GENRE MANAGEMENT ---
+  const [genres, setGenres] = useState([
+    'Programming',
+    'Novel',
+    'Science',
+    'History',
+  ]);
+  const [newGenreInput, setNewGenreInput] = useState('');
+  const [isEditingGenre, setIsEditingGenre] = useState(false);
+  const [genreToEdit, setGenreToEdit] = useState(null);
 
   // --- FORM STATES ---
   const [formData, setFormData] = useState({
@@ -51,30 +63,113 @@ export default function Dashboard() {
   const fetchData = async () => {
     try {
       if (!user) return;
-      const config = { headers: { 'user-role': user.role } };
-      const [bookRes, statsRes] = await Promise.all([
+      const [bookRes, statsRes, genreRes, tutorialRes] = await Promise.all([
         axios.get('http://localhost:5000/api/books/all'),
         axios.get('http://localhost:5000/api/books/stats'),
+        axios.get('http://localhost:5000/api/genres'),
+        axios.get('http://localhost:5000/api/tutorials'),
       ]);
-      setBooks(bookRes.data.books || bookRes.data);
+
+      setTutorials(tutorialRes.data);
+
+      // বইয়ের ডাটা ভেরিয়েবলে নিন
+      const fetchedBooks = bookRes.data.books || bookRes.data;
+      setBooks(fetchedBooks);
       setStats(statsRes.data);
 
-      if (user.role === 'admin') {
-        const [userRes, reviewRes, tutRes] = await Promise.all([
-          axios.get('http://localhost:5000/api/admin/users', config),
-          axios.get('http://localhost:5000/api/admin/reviews/pending', config),
-          axios.get('http://localhost:5000/api/tutorials', config),
-        ]);
+      if (genreRes.data && Array.isArray(genreRes.data)) {
+        setGenres(genreRes.data);
+      }
+
+      // --- রিভিউ ফিল্টার করার সঠিক লজিক ---
+      const allPending = [];
+
+      // সরাসরি fetchedBooks থেকে লুপ চালান
+      fetchedBooks.forEach((book) => {
+        if (book.reviews && Array.isArray(book.reviews)) {
+          book.reviews.forEach((rev) => {
+            // যদি status 'pending' হয় অথবা status ফিল্ডই না থাকে
+            if (rev.status === 'pending' || !rev.status) {
+              allPending.push({
+                ...rev,
+                bookId: book._id,
+                bookTitle: book.title, // কার্ডে বইয়ের নাম দেখানোর জন্য
+              });
+            }
+          });
+        }
+      });
+
+      setPendingReviews(allPending);
+      console.log('Pending Reviews Found:', allPending.length);
+
+      if (user && user.role?.toLowerCase() === 'admin') {
+        const config = { headers: { 'user-role': user.role } };
+        const userRes = await axios.get(
+          'http://localhost:5000/api/admin/users',
+          config
+        );
         setAllUsers(userRes.data);
-        setPendingReviews(reviewRes.data);
-        setTutorials(tutRes.data);
       }
     } catch (err) {
       console.error('Data Fetch Error:', err);
     }
   };
 
-  // --- HOOKS (এগুলো সব উপরে থাকতে হবে) ---
+  // --- GENRE ACTIONS ---
+
+  const handleAddGenre = async (e) => {
+    e.preventDefault();
+    if (!newGenreInput.trim()) return;
+    try {
+      await axios.post(
+        'http://localhost:5000/api/genres/add',
+        { name: newGenreInput.trim() },
+        { headers: { 'user-role': user.role } }
+      );
+
+      toast.success('Genre Added Successfully!');
+      setNewGenreInput('');
+      await fetchData();
+    } catch (err) {
+      toast.error('Failed to add genre or already exists');
+    }
+  };
+
+  const handleUpdateGenre = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put(
+        `http://localhost:5000/api/genres/${genreToEdit}`,
+        { newName: newGenreInput.trim() },
+        { headers: { 'user-role': user.role } }
+      );
+
+      // জাস্ট নিচের লাইনগুলো কনফার্ম কর
+      setIsEditingGenre(false);
+      setGenreToEdit(null);
+      setNewGenreInput('');
+      await fetchData(); // এটা মাস্ট দিবি যাতে লিস্ট রিফ্রেশ হয়
+      toast.success('Genre Updated!');
+    } catch (err) {
+      toast.error('Update failed');
+    }
+  };
+
+  // --- DELETE FUNCTION ---
+  const handleDeleteBook = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this book?')) return;
+    try {
+      await axios.delete(`http://localhost:5000/api/books/${id}`, {
+        headers: { 'user-role': user.role },
+      });
+      toast.error('Book Deleted');
+      fetchData();
+    } catch (err) {
+      toast.error('Delete failed');
+    }
+  };
+
   useEffect(() => {
     if (!loading && !user) {
       router.push('/auth/login');
@@ -83,15 +178,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) fetchData();
-
     const interval = setInterval(() => {
       if (user) fetchData();
     }, 30000);
-
     return () => clearInterval(interval);
   }, [user]);
 
-  // --- এবার আপনি কন্ডিশনাল রিটার্ন দিতে পারবেন ---
   if (loading || !user) {
     return (
       <div className="h-screen flex items-center justify-center font-serif italic text-2xl">
@@ -100,7 +192,6 @@ export default function Dashboard() {
     );
   }
 
-  // --- SEARCH & FILTER LOGIC ---
   const filteredBooks = books.filter((book) => {
     const matchesSearch =
       book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -110,7 +201,8 @@ export default function Dashboard() {
     return matchesSearch && matchesCategory;
   });
 
-  const categories = ['All', ...new Set(books.map((book) => book.genre))];
+  const categories = ['All', ...genres];
+  // --- ⭐ এই অংশটুকু এখানে যোগ করুন (Review Fetching Logic) ---
 
   // --- ADMIN ACTIONS ---
   const handleRoleChange = async (userId, newRole) => {
@@ -120,6 +212,7 @@ export default function Dashboard() {
         { role: newRole },
         { headers: { 'user-role': user.role } }
       );
+
       toast.success(`User updated to ${newRole}!`);
       fetchData();
       if (viewingUser) setViewingUser({ ...viewingUser, role: newRole });
@@ -131,21 +224,24 @@ export default function Dashboard() {
   const moderateReview = async (reviewId, bookId, action) => {
     try {
       const config = { headers: { 'user-role': user.role } };
+
       if (action === 'approve') {
         await axios.put(
-          `http://localhost:5000/api/admin/reviews/${reviewId}/approve`,
+          `http://localhost:5000/api/books/${bookId}/reviews/${reviewId}/approve`,
           {},
           config
         );
         toast.success('Review Approved!');
       } else {
         await axios.delete(
-          `http://localhost:5000/api/admin/reviews/${reviewId}`,
+          `http://localhost:5000/api/admin/reviews/${bookId}/${reviewId}`,
           config
         );
-        toast.error('Review Deleted');
+        toast.error('Review Deleted!');
       }
-      fetchData();
+
+      // 🔥 instant UI update (no flicker)
+      setPendingReviews((prev) => prev.filter((r) => r._id !== reviewId));
     } catch (err) {
       toast.error('Action failed');
     }
@@ -187,6 +283,14 @@ export default function Dashboard() {
         toast.success('New Book Added!');
       }
       setShowModal(false);
+      setFormData({
+        title: book.title,
+        author: book.author,
+        genre: book.genre?.name || book.genre,
+        coverImage: book.coverImage,
+        description: book.description,
+      });
+
       fetchData();
     } catch (err) {
       toast.error('Error saving book');
@@ -200,23 +304,19 @@ export default function Dashboard() {
     return match && match[2].length === 11 ? match[2] : null;
   };
 
-  // --- আপনার অরিজিনাল ডিজাইন শুরু ---
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-[#4A3728] font-sans">
       <Toaster position="top-right" />
-
       <div className="flex">
-        {/* --- Sidebar --- */}
         <aside className="w-64 bg-white h-screen sticky top-0 border-r border-[#E5DCC3] p-6 flex flex-col shadow-sm">
           <div className="mb-10 text-center">
             <h2 className="text-3xl font-serif font-bold tracking-tighter">
-              Lumina<span className="text-[#C1A88D]">Books</span>
+              BOOK<span className="text-[#C1A88D]">WORM</span>
             </h2>
             <p className="text-[10px] uppercase tracking-[3px] mt-1 font-bold text-gray-400">
               Management System
             </p>
           </div>
-
           <nav className="flex-1 space-y-2">
             <NavButton
               active={activeTab === 'library'}
@@ -243,14 +343,21 @@ export default function Dashboard() {
                 />
                 <NavButton
                   active={activeTab === 'reviews'}
-                  onClick={() => setActiveTab('reviews')}
+                  onClick={() => {
+                    setActiveTab('reviews');
+                  }}
                   icon="⭐"
                   label="Moderation"
+                />
+                <NavButton
+                  active={activeTab === 'genres'}
+                  onClick={() => setActiveTab('genres')}
+                  icon="🏷️"
+                  label="Genres"
                 />
               </>
             )}
           </nav>
-
           <div className="mt-auto pt-6 border-t border-gray-100">
             <div className="mb-4 p-3 bg-green-50 rounded-xl border border-green-100">
               <p className="text-[10px] font-black uppercase text-green-600 tracking-widest flex items-center gap-2">
@@ -270,7 +377,6 @@ export default function Dashboard() {
           </div>
         </aside>
 
-        {/* --- Main Content --- */}
         <main className="flex-1 p-10">
           <header className="flex justify-between items-center mb-10">
             <div>
@@ -286,6 +392,13 @@ export default function Dashboard() {
                 <button
                   onClick={() => {
                     setIsEditing(false);
+                    setFormData({
+                      title: '',
+                      author: '',
+                      genre: '',
+                      coverImage: '',
+                      description: '',
+                    });
                     setShowModal(true);
                   }}
                   className="bg-[#4A3728] text-white px-6 py-3 rounded-2xl font-bold shadow-lg hover:scale-105 transition-all"
@@ -303,7 +416,6 @@ export default function Dashboard() {
             </div>
           </header>
 
-          {/* Library View */}
           {activeTab === 'library' && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
@@ -347,9 +459,13 @@ export default function Dashboard() {
                   onChange={(e) => setSelectedCategory(e.target.value)}
                   className="px-6 py-4 bg-white border border-[#E5DCC3] rounded-2xl font-bold"
                 >
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
+                  {' '}
+                  {categories.map((cat, index) => (
+                    <option
+                      key={cat._id ?? `${cat.name}-${index}`}
+                      value={cat.name}
+                    >
+                      {cat.name}
                     </option>
                   ))}
                 </select>
@@ -392,17 +508,26 @@ export default function Dashboard() {
                           Details
                         </button>
                         {user.role === 'admin' && (
-                          <button
-                            onClick={() => {
-                              setFormData(book);
-                              setEditId(book._id);
-                              setIsEditing(true);
-                              setShowModal(true);
-                            }}
-                            className="p-2 bg-blue-50 text-blue-600 rounded-xl"
-                          >
-                            ✏️
-                          </button>
+                          <>
+                            <button
+                              onClick={() => {
+                                setFormData(book);
+                                setEditId(book._id);
+                                setIsEditing(true);
+                                setShowModal(true);
+                              }}
+                              className="p-2 bg-blue-50 text-blue-600 rounded-xl"
+                            >
+                              {' '}
+                              ✏️{' '}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBook(book._id)}
+                              className="p-2 bg-red-50 text-red-600 rounded-xl"
+                            >
+                              🗑️
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -412,96 +537,124 @@ export default function Dashboard() {
             </>
           )}
 
-          {/* User Management View */}
+          {/* --- USER MANAGEMENT TAB --- */}
           {activeTab === 'user-mgmt' && user.role === 'admin' && (
-            <div className="bg-white rounded-[35px] border border-[#E5DCC3] overflow-hidden shadow-sm">
-              <table className="w-full text-left">
-                <thead className="bg-[#FDFBF7]">
-                  <tr className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                    <th className="p-6">Member</th>
-                    <th className="p-6">Current Role</th>
-                    <th className="p-6">Management</th>
+            <div className="bg-white rounded-[40px] border border-[#E5DCC3] overflow-hidden shadow-sm">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-[#F1F3F6]">
+                  <tr>
+                    <th className="p-6 text-[10px] font-black uppercase text-gray-400 tracking-widest">
+                      User
+                    </th>
+                    <th className="p-6 text-[10px] font-black uppercase text-gray-400 tracking-widest">
+                      Email
+                    </th>
+                    <th className="p-6 text-[10px] font-black uppercase text-gray-400 tracking-widest">
+                      Role
+                    </th>
+                    <th className="p-6 text-[10px] font-black uppercase text-gray-400 tracking-widest text-right">
+                      Action
+                    </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {allUsers.map((u) => (
-                    <tr
-                      key={u._id}
-                      className="group hover:bg-[#FDFBF7] transition-all"
-                    >
-                      <td className="p-6">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={`https://ui-avatars.com/api/?name=${u.name}`}
-                            className="w-10 h-10 rounded-full"
-                          />
-                          <div>
-                            <p className="font-bold text-sm">{u.name}</p>
-                            <p className="text-xs text-gray-400 font-medium">
-                              {u.email}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-6">
-                        <span
-                          className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter ${u.role === 'admin' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}
-                        >
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="p-6">
-                        <button
-                          onClick={() => setViewingUser(u)}
-                          className="bg-[#F1F3F6] px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#4A3728] hover:text-white transition-all"
-                        >
-                          🔍 View Profile
-                        </button>
+                <tbody>
+                  {allUsers.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan="4"
+                        className="p-20 text-center text-gray-400 italic"
+                      >
+                        No users found in database
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    allUsers.map((u) => (
+                      <tr
+                        key={u._id}
+                        className="border-t border-gray-100 hover:bg-[#FDFBF7] transition-colors"
+                      >
+                        <td className="p-6 flex items-center gap-3">
+                          <div className="w-10 h-10 bg-[#4A3728] text-white rounded-xl flex items-center justify-center font-bold">
+                            {u.name?.charAt(0)}
+                          </div>
+                          <span className="font-bold text-sm">{u.name}</span>
+                        </td>
+                        <td className="p-6 text-sm text-gray-500">{u.email}</td>
+                        <td className="p-6">
+                          <span
+                            className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${u.role === 'admin' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}
+                          >
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="p-6 text-right">
+                          <button
+                            onClick={() => setViewingUser(u)}
+                            className="bg-[#F1F3F6] px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#4A3728] hover:text-white transition-all"
+                          >
+                            Manage
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           )}
-
-          {/* Review Moderation View */}
+          {/* --- MODERATION / REVIEWS TAB --- */}
+          {/* --- MODERATION / REVIEWS TAB --- */}
+          {/* --- MODERATION / REVIEWS TAB --- */}
           {activeTab === 'reviews' && user.role === 'admin' && (
-            <div className="space-y-4">
-              {pendingReviews.length === 0 ? (
-                <div className="text-center py-20 bg-white rounded-[40px] border-2 border-dashed border-gray-200 text-gray-400 italic">
-                  No reviews pending moderation ✨
-                </div>
-              ) : (
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="mb-6">
+                <h3 className="text-xl font-serif font-bold">
+                  Pending Reviews
+                </h3>
+                <p className="text-sm text-gray-400">
+                  Approve or remove reader feedback from the library.
+                </p>
+              </div>
+
+              {pendingReviews && pendingReviews.length > 0 ? (
                 pendingReviews.map((rev) => (
                   <div
                     key={rev._id}
-                    className="bg-white p-6 rounded-[25px] border border-[#E5DCC3] flex justify-between items-center shadow-sm"
+                    className="bg-white p-6 rounded-[25px] border border-[#E5DCC3] flex flex-col md:flex-row justify-between items-start md:items-center shadow-sm hover:shadow-md transition-all gap-4"
                   >
                     <div className="flex gap-4 items-center">
-                      <div className="w-10 h-10 bg-[#F1F3F6] rounded-full flex items-center justify-center font-bold">
-                        {rev.userName[0]}
+                      <div className="w-12 h-12 bg-[#4A3728] text-white rounded-2xl flex items-center justify-center font-bold text-lg shadow-inner">
+                        {rev?.userName?.charAt(0) || 'R'}
                       </div>
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-black text-sm">
-                            {rev.userName}
+                          <span className="font-black text-sm text-[#4A3728]">
+                            {rev?.userName || 'Anonymous Reader'}
                           </span>
-                          <span className="text-yellow-500 text-xs">
-                            {'⭐'.repeat(rev.rating)}
+                          <div className="flex text-yellow-500 text-[10px]">
+                            {'★'.repeat(rev.rating || 5)}
+                          </div>
+                        </div>
+                        <p className="text-gray-600 text-sm italic leading-relaxed bg-[#FDFBF7] p-2 rounded-lg border border-dashed border-[#E5DCC3]">
+                          "{rev.comment}"
+                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-[#C1A88D]">
+                            Target Book:
+                          </span>
+                          <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full">
+                            {rev.bookTitle || 'Unknown Title'}
                           </span>
                         </div>
-                        <p className="text-gray-500 text-sm italic">
-                          {rev.comment}
-                        </p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+
+                    <div className="flex gap-2 w-full md:w-auto">
                       <button
                         onClick={() =>
                           moderateReview(rev._id, rev.bookId, 'approve')
                         }
-                        className="bg-green-500 text-white px-4 py-2 rounded-xl text-xs font-bold hover:shadow-lg transition-all"
+                        className="flex-1 md:flex-none bg-green-600 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-green-700 transition-all shadow-lg active:scale-95"
                       >
                         Approve
                       </button>
@@ -509,18 +662,26 @@ export default function Dashboard() {
                         onClick={() =>
                           moderateReview(rev._id, rev.bookId, 'delete')
                         }
-                        className="bg-red-50 text-red-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-red-500 hover:text-white transition-all"
+                        className="flex-1 md:flex-none bg-red-50 text-red-500 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-100 transition-all border border-red-100 active:scale-95"
                       >
                         Delete
                       </button>
                     </div>
                   </div>
                 ))
+              ) : (
+                <div className="text-center py-24 bg-white rounded-[40px] border-2 border-dashed border-[#E5DCC3] flex flex-col items-center">
+                  <span className="text-5xl mb-4 opacity-20">✨</span>
+                  <p className="text-gray-400 font-serif italic text-lg">
+                    No reviews pending moderation
+                  </p>
+                  <p className="text-[10px] uppercase tracking-[3px] text-gray-300 mt-2">
+                    Everything is up to date
+                  </p>
+                </div>
               )}
             </div>
           )}
-
-          {/* Tutorials View */}
           {activeTab === 'tutorials' && (
             <div>
               {user.role === 'admin' && (
@@ -568,7 +729,8 @@ export default function Dashboard() {
                     type="submit"
                     className="bg-[#4A3728] text-white px-8 py-3 rounded-xl font-bold text-sm shadow-md"
                   >
-                    Embed Video
+                    {' '}
+                    Embed Video{' '}
                   </button>
                 </form>
               )}
@@ -592,13 +754,66 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+
+          {activeTab === 'genres' && user.role === 'admin' && (
+            <div className="bg-white p-10 rounded-[40px] border border-[#E5DCC3] shadow-sm max-w-2xl">
+              <h2 className="text-2xl font-serif font-bold mb-6">
+                Manage Genres
+              </h2>
+
+              <form
+                onSubmit={isEditingGenre ? handleUpdateGenre : handleAddGenre}
+                className="flex gap-4 mb-8"
+              >
+                <input
+                  type="text"
+                  placeholder="Genre name"
+                  value={newGenreInput}
+                  onChange={(e) => setNewGenreInput(e.target.value)}
+                  className="flex-1 p-4 bg-[#F1F3F6] rounded-2xl outline-none font-medium"
+                  required
+                />
+                <button
+                  type="submit"
+                  className="bg-[#4A3728] text-white px-6 rounded-2xl font-bold"
+                >
+                  {isEditingGenre ? 'Update' : 'Add'}
+                </button>
+              </form>
+
+              <div className="space-y-3">
+                {genres.length === 0 ? (
+                  <p className="text-gray-400 italic">No genres found</p>
+                ) : (
+                  genres.map((g) => (
+                    <div
+                      key={g._id}
+                      className="flex justify-between items-center bg-[#FDFBF7] p-4 rounded-2xl border border-[#E5DCC3]"
+                    >
+                      <span className="font-bold">{g.name}</span>
+                      <button
+                        onClick={() => {
+                          setIsEditingGenre(true);
+                          setGenreToEdit(g._id);
+                          setNewGenreInput(g.name);
+                        }}
+                        className="text-blue-600 font-bold text-sm"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </main>
       </div>
 
-      {/* --- MODALS (User, Book, etc.) --- */}
+      {/* --- MODALS --- */}
       {viewingUser && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-[40px] w-full max-w-md p-10 shadow-2xl border border-[#E5DCC3] text-center">
+          <div className="bg-white rounded-[40px] w-1/3 max-md p-10 shadow-2xl border border-[#E5DCC3] text-center">
             <div className="w-24 h-24 bg-[#FDFBF7] rounded-3xl mx-auto mb-6 flex items-center justify-center border-2 border-[#E5DCC3] overflow-hidden">
               <img
                 src={`https://ui-avatars.com/api/?name=${viewingUser.name}&size=128`}
@@ -614,7 +829,11 @@ export default function Dashboard() {
                 System Role
               </span>
               <span
-                className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${viewingUser.role === 'admin' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}
+                className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
+                  viewingUser.role === 'admin'
+                    ? 'bg-red-50 text-red-600'
+                    : 'bg-green-50 text-green-600'
+                }`}
               >
                 {viewingUser.role}
               </span>
@@ -675,13 +894,15 @@ export default function Dashboard() {
                   onChange={(e) =>
                     setFormData({ ...formData, genre: e.target.value })
                   }
-                  className="bg-[#F1F3F6] rounded-2xl p-4 font-bold text-xs"
+                  className="bg-[#F1F3F6] rounded-2xl p-4 font-bold text-xs outline-none"
                 >
-                  <option value="">Genre</option>
-                  <option value="Programming">Programming</option>
-                  <option value="Novel">Novel</option>
-                  <option value="Science">Science</option>
-                  <option value="History">History</option>
+                  {' '}
+                  <option value="">Genre</option>{' '}
+                  {genres.map((g) => (
+                    <div key={g._id}>
+                      <span>{g.name}</span>
+                    </div>
+                  ))}
                 </select>
               </div>
               <input
@@ -726,12 +947,15 @@ export default function Dashboard() {
   );
 }
 
-// --- SMALL COMPONENTS ---
 function NavButton({ active, onClick, icon, label }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold text-sm transition-all ${active ? 'bg-[#4A3728] text-white shadow-md' : 'text-gray-500 hover:bg-[#FDFBF7]'}`}
+      className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold text-sm transition-all ${
+        active
+          ? 'bg-[#4A3728] text-white shadow-md'
+          : 'text-gray-500 hover:bg-[#FDFBF7]'
+      }`}
     >
       <span className="text-lg">{icon}</span> {label}
     </button>

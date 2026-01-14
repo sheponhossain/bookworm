@@ -4,6 +4,7 @@ const Book = require('../models/Book');
 const User = require('../models/User'); // ইউজার মডেলটি ইম্পোর্ট করতে হবে
 const Tutorial = require('../models/Tutorial'); // টিউটোরিয়াল মডেল (নিচে স্কিমা বলে দিচ্ছি)
 const { adminOnly } = require('../middlewares/auth');
+// const Book = require('../models/Book');
 
 // ---------------------------------------------------------
 // ১. সবার জন্য উন্মুক্ত রাউট (Public Routes)
@@ -12,7 +13,7 @@ const { adminOnly } = require('../middlewares/auth');
 /** @desc সব বইয়ের লিস্ট পাওয়া */
 router.get('/all', async (req, res) => {
   try {
-    const { page = 1, limit = 6, genre = 'All' } = req.query;
+    const { page = 1, limit = 15, genre = 'All' } = req.query;
     const skip = (page - 1) * limit;
 
     let filterQuery = {};
@@ -137,37 +138,41 @@ router.put('/admin/users/:id/role', adminOnly, async (req, res) => {
 // ৪. রিভিউ সিস্টেম ও মডারেশন - UPDATED
 // ---------------------------------------------------------
 
-/** @desc ইউজার রিভিউ জমা দিবে (ডিফল্ট স্ট্যাটাস: pending) */
-router.post('/:id/review', async (req, res) => {
+// অ্যাডমিন প্যানেলে পেন্ডিং রিভিউ দেখানোর রাউট
+router.get('/reviews/pending', async (req, res) => {
   try {
-    const { user, rating, comment } = req.body;
-    const book = await Book.findById(req.params.id);
+    // সব বইয়ের ভেতর থেকে শুধু 'pending' স্ট্যাটাসের রিভিউগুলো বের করা
+    const books = await Book.find({ 'reviews.status': 'pending' });
 
-    book.reviews.push({
-      user,
-      rating,
-      comment,
-      status: 'pending', // ডকুমেণ্ট অনুযায়ী মডারেশনে থাকবে
+    let pendingReviews = [];
+    books.forEach((book) => {
+      book.reviews.forEach((rev) => {
+        if (rev.status === 'pending') {
+          pendingReviews.push({
+            ...rev._doc,
+            bookId: book._id,
+            bookTitle: book.title,
+          });
+        }
+      });
     });
 
-    await book.save();
-    res.status(201).json({ message: 'Review submitted for moderation! ⏳' });
+    res.json(pendingReviews);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ message: 'Error fetching pending reviews' });
   }
 });
 
-/** @desc সব পেন্ডিং রিভিউ দেখা (Admin Only) */
 router.get('/admin/reviews/pending', adminOnly, async (req, res) => {
   try {
-    const books = await Book.find({ 'reviews.status': 'pending' });
+    const books = await Book.find({ 'reviews.isApproved': false });
     let pending = [];
     books.forEach((b) => {
-      b.reviews
-        .filter((r) => r.status === 'pending')
-        .forEach((r) => {
+      b.reviews.forEach((r) => {
+        if (r.isApproved === false) {
           pending.push({ ...r._doc, bookId: b._id, bookTitle: b.title });
-        });
+        }
+      });
     });
     res.json(pending);
   } catch (err) {
@@ -175,19 +180,109 @@ router.get('/admin/reviews/pending', adminOnly, async (req, res) => {
   }
 });
 
-/** @desc রিভিউ অ্যাপ্রুভ করা (Admin Only) */
-router.put('/admin/reviews/:reviewId/approve', adminOnly, async (req, res) => {
+router.put(
+  '/admin/reviews/:bookId/:reviewId/approve',
+  adminOnly,
+  async (req, res) => {
+    try {
+      const { bookId, reviewId } = req.params;
+      await Book.findOneAndUpdate(
+        { _id: bookId, 'reviews._id': reviewId },
+        { $set: { 'reviews.$.isApproved': true } }
+      );
+      res.json({ message: 'Review Approved! ✅' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+/** @desc রিভিউ ডিলিট করা (Admin Only) */
+router.delete(
+  '/admin/reviews/:bookId/:reviewId',
+  adminOnly,
+  async (req, res) => {
+    try {
+      const { bookId, reviewId } = req.params;
+
+      await Book.findByIdAndUpdate(bookId, {
+        $pull: { reviews: { _id: reviewId } },
+      });
+
+      res.json({ message: 'Review Deleted Successfully! 🗑️' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+// controllers/bookController.js
+router.post('/:bookId/review', async (req, res) => {
   try {
-    const book = await Book.findOne({ 'reviews._id': req.params.reviewId });
-    const review = book.reviews.id(req.params.reviewId);
-    review.status = 'approved';
+    const { bookId } = req.params;
+    const review = {
+      _id: new mongoose.Types.ObjectId(),
+      userId: req.body.userId,
+      userName: req.body.userName,
+      rating: req.body.rating,
+      comment: req.body.comment,
+      bookTitle: req.body.bookTitle,
+      status: 'pending',
+      createdAt: new Date(),
+    };
+
+    const book = await Book.findById(bookId);
+    if (!book) return res.status(404).json({ message: 'Book not found' });
+
+    // 🔥 THIS LINE WAS MISSING
+    book.reviews.push(review);
+
     await book.save();
-    res.json({ message: 'Review Approved! ✅' });
+    res.status(201).json({ message: 'Review submitted for approval' });
+  } catch (err) {
+    res.status(500).json({ message: 'Review failed' });
+  }
+});
+
+// Review Approve korar backend route
+router.put('/reviews/:reviewId/approve', async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+    // Database-e oi review-ti khuje tar status 'approved' kora
+    const updatedBook = await Book.findOneAndUpdate(
+      { 'reviews._id': reviewId },
+      { $set: { 'reviews.$.status': 'approved' } },
+      { new: true }
+    );
+
+    if (!updatedBook)
+      return res.status(404).json({ message: 'Review not found' });
+    res.json({ message: 'Review Approved Successfully!' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server Error' });
+  }
+});
+//নতুন কোডটি এখানে বসান (রিভিউ পাওয়ার জন্য) ---
+// ইউজার যখন রিভিউ দিবে
+router.post('/:id/review', async (req, res) => {
+  try {
+    const book = await Book.findById(req.params.id);
+    if (!book) return res.status(404).json({ message: 'Book not found' });
+
+    const newReview = {
+      userId: req.body.userId,
+      userName: req.body.userName,
+      rating: req.body.rating,
+      comment: req.body.comment,
+      status: 'pending', // ড্যাশবোর্ডে দেখানোর জন্য এটি জরুরি
+      createdAt: new Date(),
+    };
+
+    book.reviews.push(newReview);
+    await book.save();
+    res.status(201).json({ message: 'Review added and pending for approval' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 // ---------------------------------------------------------
 // ৫. টিউটোরিয়াল ম্যানেজমেন্ট (YouTube Embed) - NEW
 // ---------------------------------------------------------
