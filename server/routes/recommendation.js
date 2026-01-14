@@ -14,10 +14,9 @@ router.get('/personalized/:userId', async (req, res) => {
       : [];
     const readBookIds = library ? library.books.map((b) => b.bookId._id) : [];
 
-    // ১. যদি ইউজার নতুন হয় (৩টির কম বই পড়েছে)
     if (readBooks.length < 3) {
       const popularBooks = await Book.find()
-        .sort({ averageRating: -1, rating: -1 }) // rating বা averageRating যেটাই থাক
+        .sort({ averageRating: -1, rating: -1 })
         .limit(15);
 
       return res.json({
@@ -28,7 +27,6 @@ router.get('/personalized/:userId', async (req, res) => {
       });
     }
 
-    // ২. জেনার বিশ্লেষণ
     const genreCount = {};
     readBooks.forEach((b) => {
       if (b.bookId && b.bookId.genre) {
@@ -41,19 +39,17 @@ router.get('/personalized/:userId', async (req, res) => {
       genreCount[a] > genreCount[b] ? a : b
     );
 
-    // ৩. রিকমেন্ডেশন লজিক (১৫টি বই নিশ্চিত করার জন্য)
     let recommendations = await Book.find({
       genre: topGenre,
-      _id: { $nin: readBookIds }, // অলরেডি পড়া বই বাদ
+      _id: { $nin: readBookIds },
     })
       .sort({ averageRating: -1 })
       .limit(15);
 
-    // ৪. যদি ১৫টি পূর্ণ না হয় (Fall-back logic)
     if (recommendations.length < 15) {
       const additionalBooks = await Book.find({
         _id: { $nin: [...readBookIds, ...recommendations.map((b) => b._id)] },
-        genre: { $ne: topGenre }, // অন্য জেনার থেকে বই আনা
+        genre: { $ne: topGenre },
       })
         .sort({ averageRating: -1 })
         .limit(15 - recommendations.length);

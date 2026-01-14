@@ -17,13 +17,12 @@ export const AuthProvider = ({ children }) => {
     if (storedUser && token) {
       setUser(JSON.parse(storedUser));
     } else {
-      // শুধু লগইন না থাকলে লগইন পেজে পাঠাবে
       if (!pathname.includes('/auth')) {
         router.push('/auth/login');
       }
     }
     setLoading(false);
-  }, [pathname]); // এখানে বাড়তি কোনো লজিক রাখবেন না যা রিডাইরেক্ট করে
+  }, [pathname]);
 
   const logout = () => {
     localStorage.removeItem('token');

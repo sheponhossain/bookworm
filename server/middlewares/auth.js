@@ -1,7 +1,6 @@
 // server/middleware/auth.js
 
 const adminOnly = (req, res, next) => {
-  // ফ্রন্টএন্ড থেকে পাঠানো হেডারের রোল চেক করা হচ্ছে
   const userRole = req.headers['user-role'];
 
   if (userRole === 'admin') {

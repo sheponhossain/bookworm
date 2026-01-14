@@ -64,20 +64,14 @@ export default function BrowsePage() {
       JSON.stringify({ ...bookToSave, status: shelfName })
     );
     setUserLibrary((prev) => ({ ...prev, [bookId]: { shelf: shelfName } }));
-    // শুধুমাত্র ম্যানুয়াল সেলফ চেঞ্জের জন্য টোস্ট দেখাবে, অটো-রিডিং স্টার্টের জন্য নিচে আলাদা লজিক আছে
     if (shelfName !== 'Currently Reading') {
       toast.success(`Moved to ${shelfName} ✨`);
     }
   };
 
-  // --- নতুন ফাংশন: Start Reading বাটনের জন্য ---
   const handleStartReading = (book) => {
     if (!user) return toast.error('Please login first to read');
-
-    // বইটিকে 'Currently Reading' হিসেবে লাইব্রেরিতে সেভ করা
     handleAddToShelf(book._id, 'Currently Reading');
-
-    // রিডার ভিউ ওপেন করা
     setIsReading(true);
     toast.success('Added to Currently Reading 📖');
   };
@@ -190,7 +184,6 @@ export default function BrowsePage() {
                 <h2 className="text-lg font-black uppercase tracking-[4px] text-[#C1A88D]">
                   Explore All Books
                 </h2>
-                {/* এই বাটনে এখন আর এরর আসবে না */}
                 <button
                   onClick={() => router.push('/all-books')}
                   className="text-[10px] font-black uppercase tracking-widest bg-[#4A3728] text-white px-6 py-2.5 rounded-xl hover:bg-[#C1A88D] transition-all"
@@ -318,7 +311,6 @@ export default function BrowsePage() {
                   </button>
                 ))}
               </div>
-              {/* --- আপডেট করা বাটন --- */}
               <button
                 onClick={() => handleStartReading(selectedBook)}
                 className="bg-[#4A3728] text-white w-fit px-12 py-4 rounded-xl font-black uppercase text-[10px] tracking-[4px] hover:bg-[#C1A88D] transition-all shadow-lg"

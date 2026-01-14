@@ -4,13 +4,10 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const connectDB = require('./config/db');
 
-// ১. অ্যাপ তৈরি
 const app = express();
 
-// ২. ডাটাবেজ কানেক্ট
 connectDB();
 
-// ৩. মিডলওয়্যারগুলো (অবশ্যই রাউটের আগে থাকতে হবে)
 app.use(
   cors({
     origin: 'http://localhost:3000',
@@ -18,9 +15,8 @@ app.use(
     allowedHeaders: ['Content-Type', 'user-role', 'Authorization'],
   })
 );
-app.use(express.json()); // এটি পোস্ট রিকোয়েস্টের ডেটা পড়ার জন্য জরুরি
+app.use(express.json());
 
-// ৪. মডেলগুলো ইমপোর্ট
 const Book = require('./models/Book');
 
 // UserStats Model
@@ -48,9 +44,6 @@ const Genre =
     })
   );
 
-// --- ৫. রাউট লজিক ---
-
-// স্ট্যাটস রাউট
 app.get('/api/stats/:email', async (req, res) => {
   try {
     let stats = await UserStats.findOne({ userEmail: req.params.email });
@@ -75,7 +68,6 @@ app.patch('/api/stats/update-goal', async (req, res) => {
   }
 });
 
-// জেনার রাউটস
 app.get('/api/genres', async (req, res) => {
   try {
     const genres = await Genre.find();
@@ -107,27 +99,34 @@ app.put('/api/genres/:oldName', async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 });
+app.delete('/api/genres/:id', async (req, res) => {
+  try {
+    const deletedGenre = await Genre.findByIdAndDelete(req.params.id);
+    if (!deletedGenre)
+      return res.status(404).json({ message: 'Genre not found' });
+    res.status(200).json({ message: 'Genre deleted' });
+  } catch (err) {
+    res.status(500).json({ message: 'Delete failed' });
+  }
+});
 
-// রিভিউ রাউট
 app.post('/api/books/:id/review', async (req, res) => {
-  const { userId, userName, rating, comment } = req.body;
   try {
     const book = await Book.findById(req.params.id);
-    if (!book) return res.status(404).send('Book not found');
+    if (!book) return res.status(404).json({ message: 'Book not found' });
 
-    book.reviews.push({
-      userId,
-      userName,
-      rating,
-      comment,
+    const newReview = {
+      userName: req.body.userName,
+      rating: req.body.rating,
+      comment: req.body.comment,
       status: 'pending',
-    });
+    };
 
+    book.reviews.push(newReview);
     await book.save();
-    res.status(200).json({ message: 'Review submitted for approval' });
+    res.status(200).json({ message: 'Success' });
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server Error');
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -155,7 +154,52 @@ app.get('/api/reviews/pending', async (req, res) => {
   }
 });
 
-// --- ৬. রাউট ফাইলগুলো ইমপোর্ট ও ব্যবহার ---
+app.get('/api/books/all', async (req, res) => {
+  try {
+    const books = await Book.find({});
+
+    if (!books) {
+      return res.status(200).json([]);
+    }
+
+    res.status(200).json(books);
+  } catch (err) {
+    console.error('Backend Search Error:', err);
+    res
+      .status(500)
+      .json({ message: 'Database connection error', error: err.message });
+  }
+});
+
+app.patch('/api/admin/reviews/moderate', async (req, res) => {
+  const { reviewId, bookId, action } = req.body;
+  const userRole = req.headers['user-role'];
+
+  if (userRole !== 'admin') {
+    return res.status(403).json({ message: 'Access Denied: Admin only' });
+  }
+
+  try {
+    const book = await Book.findById(bookId);
+    if (!book) return res.status(404).json({ message: 'Book not found' });
+
+    if (action === 'approve') {
+      const review = book.reviews.id(reviewId);
+      if (review) {
+        review.status = 'approved';
+      }
+    } else if (action === 'delete') {
+      book.reviews.pull(reviewId);
+    }
+
+    await book.save();
+    res.json({ message: `Review ${action}d successfully` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error occurred' });
+  }
+});
+
 const authRoutes = require('./routes/authRoutes');
 const bookRoutes = require('./routes/bookRoutes');
 const adminRoutes = require('./routes/adminRoutes');
@@ -164,10 +208,9 @@ const tutorialRoutes = require('./routes/tutorialRoutes');
 app.use('/api/auth', authRoutes);
 app.use('/api/books', bookRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/tutorials', tutorialRoutes); // টিউটোরিয়াল এখন ডাটা পাবে
+app.use('/api/tutorials', tutorialRoutes);
 
 app.get('/', (req, res) => res.send('Server is running'));
 
-// ৭. সার্ভার পোর্ট
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server is running on port ${PORT}`));

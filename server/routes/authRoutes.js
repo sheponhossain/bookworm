@@ -22,14 +22,13 @@ router.post('/login', async (req, res) => {
       process.env.JWT_SECRET
     );
 
-    // এখানে অবশ্যই 'role' পাঠাতে হবে
     res.json({
       token,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role, // এটি চেক করুন
+        role: user.role,
         photoURL: user.photoURL,
       },
     });
@@ -41,7 +40,7 @@ router.post('/login', async (req, res) => {
 // POST: Register a new user
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, photoURL, role } = req.body; // নিশ্চিত করুন role এখানে আছে
+    const { name, email, password, photoURL, role } = req.body;
 
     let user = await User.findOne({ email });
     if (user) return res.status(400).json({ message: 'User already exists' });
@@ -54,7 +53,7 @@ router.post('/register', async (req, res) => {
       email,
       password: hashedPassword,
       photoURL: photoURL || '',
-      role: role || 'user', // ফ্রন্টএন্ড থেকে role আসলে সেটি সেভ হবে
+      role: role || 'user',
     });
 
     await user.save();

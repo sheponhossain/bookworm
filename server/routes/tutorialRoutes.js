@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const Tutorial = require('../models/Tutorial');
 
-// সব ভিডিও পাওয়ার জন্য
 router.get('/', async (req, res) => {
   try {
     const tutorials = await Tutorial.find().sort({ createdAt: -1 });
@@ -12,7 +11,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// নতুন ভিডিও অ্যাড করার জন্য (পোস্ট রিকোয়েস্ট)
 router.post('/add', async (req, res) => {
   try {
     const newTutorial = new Tutorial({
@@ -27,7 +25,6 @@ router.post('/add', async (req, res) => {
   }
 });
 
-// ভিডিও ডিলিট করার জন্য
 router.delete('/:id', async (req, res) => {
   try {
     await Tutorial.findByIdAndDelete(req.params.id);

@@ -12,7 +12,6 @@ export default function MyLibraryPage() {
   const router = useRouter();
   const [savedBooks, setSavedBooks] = useState([]);
 
-  // dbStats এর বদলে localStats ব্যবহার করছি
   const [localStats, setLocalStats] = useState({
     annualGoal: 50,
     readingStreak: 0,
@@ -64,7 +63,6 @@ export default function MyLibraryPage() {
 
   const COLORS = ['#4A3728', '#C1A88D', '#E5DCC3', '#D4C3A3', '#8B735B'];
 
-  // --- লোকালস্টোরেজ থেকে গোল এবং স্ট্যাটাস লোড করা ---
   const loadLocalStats = () => {
     const savedGoal = localStorage.getItem('user_reading_goal');
     if (savedGoal) {
@@ -74,7 +72,6 @@ export default function MyLibraryPage() {
     }
   };
 
-  // --- গোল আপডেট করার ফাংশন (LocalStorage) ---
   const saveNewGoal = () => {
     localStorage.setItem('user_reading_goal', tempGoal.toString());
     setLocalStats((prev) => ({ ...prev, annualGoal: tempGoal }));
@@ -102,11 +99,10 @@ export default function MyLibraryPage() {
     if (!authLoading && !user) router.push('/auth/login');
     if (user) {
       fetchMyLibrary();
-      loadLocalStats(); // ডেটাবেসের বদলে লোকাল থেকে লোড
+      loadLocalStats();
     }
   }, [user, authLoading, router]);
 
-  // স্ট্যাটাস আপডেট লজিক
   const updateStatus = (id, newStatus) => {
     const updatedBooks = savedBooks.map((book) => {
       if (book._id === id) {
@@ -153,31 +149,37 @@ export default function MyLibraryPage() {
       ) : (
         <>
           {/* Header */}
-          <header className="max-w-7xl mx-auto mb-16 flex flex-col md:flex-row justify-between items-end gap-6">
-            <div>
-              <h1 className="text-5xl font-serif font-bold mb-2">
+          <header className="max-w-7xl mx-auto mb-12 flex flex-col md:flex-row justify-between items-center md:items-end gap-8 px-4">
+            {/* Left Side: Text Content */}
+            <div className="text-center md:text-left">
+              <h1 className="text-4xl md:text-5xl font-serif font-bold mb-3 leading-tight">
                 My Personal <span className="italic text-[#C1A88D]">Shelf</span>
               </h1>
-              <p className="text-gray-400 font-medium uppercase text-[10px] tracking-[4px]">
+              <p className="text-gray-400 font-medium uppercase text-[9px] md:text-[10px] tracking-[3px] md:tracking-[4px]">
                 Welcome, {user.displayName || user.email?.split('@')[0]}
               </p>
             </div>
+
+            {/* Right Side: Analytics Button */}
             <button
               onClick={() => router.push('/my-library/analytics')}
-              className="bg-white border border-[#E5DCC3] p-5 rounded-3xl flex items-center gap-4 hover:shadow-lg transition-all shadow-sm"
+              className="w-full md:w-auto bg-white border border-[#E5DCC3] p-4 md:p-5 rounded-2xl md:rounded-3xl flex items-center justify-center md:justify-start gap-5 hover:shadow-lg transition-all shadow-sm group"
             >
               <div className="text-left">
-                <p className="text-[9px] font-black uppercase text-[#C1A88D]">
+                <p className="text-[8px] md:text-[9px] font-black uppercase text-[#C1A88D] group-hover:text-[#4A3728] transition-colors">
                   Insights
                 </p>
-                <p className="text-sm font-bold">Analytics</p>
+                <p className="text-xs md:text-sm font-bold text-gray-800">
+                  Analytics
+                </p>
               </div>
-              <span className="text-xl">📈</span>
+              <div className="bg-[#FDFBF7] p-2 rounded-xl text-xl group-hover:scale-110 transition-transform">
+                📈
+              </div>
             </button>
           </header>
 
           <section className="max-w-7xl mx-auto mb-20 grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* গোল কার্ড */}
             <div
               onClick={() => setIsGoalModalOpen(true)}
               className="bg-white rounded-[40px] p-8 border border-[#E5DCC3] flex flex-col items-center justify-center shadow-sm cursor-pointer hover:border-[#C1A88D] transition-all group"
@@ -225,6 +227,9 @@ export default function MyLibraryPage() {
             {/* অন্যান্য স্ট্যাটাস */}
             <div className="lg:col-span-2 bg-white rounded-[40px] p-10 border border-[#E5DCC3] grid grid-cols-1 md:grid-cols-2 gap-10 shadow-sm">
               <div className="h-full min-h-[180px]">
+                <h3 className="text-[10px] font-black uppercase tracking-widest mb-6">
+                  Total BookWorm
+                </h3>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -283,7 +288,6 @@ export default function MyLibraryPage() {
         </>
       )}
 
-      {/* --- পপআপ (MODAL) --- */}
       {isGoalModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
           <div className="bg-white rounded-[40px] p-10 max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95 duration-200">
@@ -334,7 +338,6 @@ export default function MyLibraryPage() {
   );
 }
 
-// সাব-কম্পোনেন্টসমূহ (বাকি কোড আপনার আগের মতোই আছে)
 function StatRow({ label, value, unit }) {
   return (
     <div className="flex justify-between items-end border-b border-[#F8F5F0] pb-3">

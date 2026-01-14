@@ -17,10 +17,8 @@ import {
 } from 'recharts';
 
 export default function AnalyticsPage() {
-  // কালার প্যালেট (আপনার থিমের সাথে মিল রেখে)
   const COLORS = ['#4A3728', '#C1A88D', '#E5DCC3', '#8B5E3C', '#A69076'];
 
-  // ডামি ডাটা (এগুলো পরে আপনার এপিআই থেকে আসবে)
   const genreData = [
     { name: 'Programming', value: 400 },
     { name: 'Novel', value: 300 },

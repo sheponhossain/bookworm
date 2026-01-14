@@ -2,12 +2,10 @@ const express = require('express');
 const router = express.Router();
 const UserStats = require('../models/UserStats');
 
-// ১. ইউজারের স্ট্যাটাস গেট করা
 router.get('/:email', async (req, res) => {
   try {
     let stats = await UserStats.findOne({ userEmail: req.params.email });
 
-    // যদি প্রথমবার হয়, তবে নতুন ডাটা তৈরি করবে
     if (!stats) {
       stats = await UserStats.create({ userEmail: req.params.email });
     }
@@ -26,7 +24,6 @@ const Genre =
     })
   );
 
-// ২. অ্যানুয়াল গোল আপডেট করা
 router.patch('/update-goal', async (req, res) => {
   const { email, newGoal } = req.body;
   try {

@@ -10,17 +10,15 @@ import toast, { Toaster } from 'react-hot-toast';
 export default function Dashboard() {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
+  const API_URL = 'http://localhost:5000/api';
 
-  // --- UI STATES ---
   const [activeTab, setActiveTab] = useState('library');
   const [showModal, setShowModal] = useState(false);
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [showProfile, setShowProfile] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [viewingUser, setViewingUser] = useState(null);
+  const [selectedBook, setSelectedBook] = useState(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   // const [genres, setGenres] = useState([]);
 
-  // --- DATA STATES ---
   const [books, setBooks] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [pendingReviews, setPendingReviews] = useState([]);
@@ -32,7 +30,6 @@ export default function Dashboard() {
     readingGoal: '80%',
   });
 
-  // --- NEW STATES FOR GENRE MANAGEMENT ---
   const [genres, setGenres] = useState([
     'Programming',
     'Novel',
@@ -43,7 +40,6 @@ export default function Dashboard() {
   const [isEditingGenre, setIsEditingGenre] = useState(false);
   const [genreToEdit, setGenreToEdit] = useState(null);
 
-  // --- FORM STATES ---
   const [formData, setFormData] = useState({
     title: '',
     author: '',
@@ -55,11 +51,9 @@ export default function Dashboard() {
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null);
 
-  // --- NEW STATES FOR SEARCH & FILTER ---
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  // --- API FETCHING ---
   const fetchData = async () => {
     try {
       if (!user) return;
@@ -71,8 +65,6 @@ export default function Dashboard() {
       ]);
 
       setTutorials(tutorialRes.data);
-
-      // বইয়ের ডাটা ভেরিয়েবলে নিন
       const fetchedBooks = bookRes.data.books || bookRes.data;
       setBooks(fetchedBooks);
       setStats(statsRes.data);
@@ -82,12 +74,14 @@ export default function Dashboard() {
       }
 
       const allPending = [];
-
-      // সরাসরি fetchedBooks থেকে লুপ চালান
       fetchedBooks.forEach((book) => {
         if (book.reviews && Array.isArray(book.reviews)) {
           book.reviews.forEach((rev) => {
-            if (rev.status === 'pending' || !rev.status) {
+            const currentStatus = rev.status
+              ? rev.status.toLowerCase().trim()
+              : 'pending';
+
+            if (currentStatus === 'pending') {
               allPending.push({
                 ...rev,
                 bookId: book._id,
@@ -99,8 +93,6 @@ export default function Dashboard() {
       });
 
       setPendingReviews(allPending);
-      console.log('Pending Reviews Found:', allPending.length);
-
       if (user && user.role?.toLowerCase() === 'admin') {
         const config = { headers: { 'user-role': user.role } };
         const userRes = await axios.get(
@@ -110,11 +102,9 @@ export default function Dashboard() {
         setAllUsers(userRes.data);
       }
     } catch (err) {
-      console.error('Data Fetch Error:', err);
+      console.error('Master Fetch Error:', err);
     }
   };
-
-  // --- GENRE ACTIONS ---
 
   const handleAddGenre = async (e) => {
     e.preventDefault();
@@ -137,37 +127,46 @@ export default function Dashboard() {
   const handleGenreSubmit = async (e) => {
     e.preventDefault();
     try {
+      const config = { headers: { 'user-role': user.role } };
       if (isEditingGenre) {
-        // আপডেট লজিক
-        await axios.put(`${API_URL}/genres/${genreToEdit}`, {
-          newName: newGenreInput,
-        });
-        toast.success('Genre updated successfully');
+        await axios.put(
+          `http://localhost:5000/api/genres/${genreToEdit}`,
+          { newName: newGenreInput },
+          config
+        );
+        toast.success('Genre Updated!');
       } else {
-        // অ্যাড লজিক
-        await axios.post(`${API_URL}/genres/add`, { name: newGenreInput });
-        toast.success('New genre added');
+        await axios.post(
+          'http://localhost:5000/api/genres/add',
+          { name: newGenreInput },
+          config
+        );
+        toast.success('Genre Added!');
       }
       setNewGenreInput('');
       setIsEditingGenre(false);
-      fetchGenres(); // ডাটা রিফ্রেশ
+      fetchData();
     } catch (err) {
-      toast.error('Operation failed');
+      toast.error(err.response?.data?.message || 'Operation failed');
     }
   };
 
-  // --- DELETE FUNCTION ---
   const handleDeleteGenre = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this genre?')) return;
+    if (!id) return toast.error('Invalid Genre ID');
+    if (!window.confirm('Are you sure?')) return;
+
     try {
-      await axios.delete(`${API_URL}/genres/${id}`);
-      toast.success('Genre removed');
-      fetchGenres();
+      await axios.delete(`http://localhost:5000/api/genres/${id}`, {
+        headers: { 'user-role': user.role },
+      });
+      toast.success('Genre deleted');
+      fetchData();
     } catch (err) {
-      toast.error('Failed to delete');
+      toast.error(
+        'Failed to delete: ' + (err.response?.data?.message || 'Server error')
+      );
     }
   };
-  // পেন্ডিং রিভিউ লোড করা
   const fetchPendingReviews = async () => {
     try {
       const res = await axios.get(`${API_URL}/reviews/pending`);
@@ -176,17 +175,26 @@ export default function Dashboard() {
       console.error('Error fetching reviews');
     }
   };
+
   const moderateReview = async (reviewId, bookId, action) => {
     try {
-      await axios.patch(`${API_URL}/admin/reviews/moderate`, {
-        reviewId,
-        bookId,
-        action,
-      });
-      toast.success(`Review ${action}d`);
-      fetchPendingReviews();
+      await axios.patch(
+        `http://localhost:5000/api/admin/reviews/moderate`,
+        {
+          reviewId,
+          bookId,
+          action,
+        },
+        {
+          headers: { 'user-role': user.role },
+        }
+      );
+
+      toast.success(`Review ${action === 'approve' ? 'Approved' : 'Deleted'}`);
+      fetchData();
     } catch (err) {
-      toast.error('Action failed');
+      console.error('Moderation Action Error:', err);
+      toast.error('Could not complete moderation');
     }
   };
 
@@ -223,7 +231,6 @@ export default function Dashboard() {
 
   const categories = ['All', ...genres];
 
-  // --- ADMIN ACTIONS ---
   const handleRoleChange = async (userId, newRole) => {
     try {
       await axios.put(
@@ -381,7 +388,7 @@ export default function Dashboard() {
                 {activeTab.replace('-', ' ')}
               </h1>
               <p className="text-gray-400 font-medium">
-                Welcome back, Librarian {user?.name}
+                Welcome back, BookWorm {user?.name}
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -454,7 +461,7 @@ export default function Dashboard() {
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="px-6 py-4 bg-white border border-[#E5DCC3] rounded-2xl font-bold"
+                  className="px-6 py-4 bg-white border border-[#E5DCC3] rounded-2xl font-bold "
                 >
                   {' '}
                   {categories.map((cat, index) => (
@@ -499,7 +506,10 @@ export default function Dashboard() {
                       </p>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setSelectedBook(book)}
+                          onClick={() => {
+                            setSelectedBook(book);
+                            setIsDetailsOpen(true);
+                          }}
                           className="flex-1 bg-[#F1F3F6] py-2 rounded-xl text-xs font-bold hover:bg-[#4A3728] hover:text-white transition-all"
                         >
                           Details
@@ -533,7 +543,7 @@ export default function Dashboard() {
               </div>
             </>
           )}
-          {/* --- USER MANAGEMENT TAB --- */}
+          {/* --- USER MANAGEMENT --- */}
           {activeTab === 'user-mgmt' && user.role === 'admin' && (
             <div className="bg-white rounded-[40px] border border-[#E5DCC3] overflow-hidden shadow-sm">
               <table className="w-full text-left border-collapse">
@@ -797,7 +807,6 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {tutorials && tutorials.length > 0 ? (
                   tutorials.map((tut) => {
-                    // ভিডিও আইডিটি আগে বের করে নিন
                     const videoId = getYouTubeID(tut.url || tut.videoUrl);
 
                     return (
@@ -825,7 +834,6 @@ export default function Dashboard() {
                             {tut.title}
                           </h3>
 
-                          {/* অ্যাডমিন ডিলিট বাটন (যদি প্রয়োজন হয়) */}
                           {user?.role === 'admin' && (
                             <button
                               onClick={() => handleDelete(tut._id)}
@@ -932,15 +940,16 @@ export default function Dashboard() {
                   onChange={(e) =>
                     setFormData({ ...formData, genre: e.target.value })
                   }
-                  className="bg-[#F1F3F6] rounded-2xl p-4 font-bold text-xs outline-none"
+                  className="bg-[#F1F3F6] rounded-2xl p-4 font-bold text-xs outline-none w-full"
                 >
-                  {' '}
-                  <option value="">Genre</option>{' '}
-                  {genres.map((g) => (
-                    <div key={g._id}>
-                      <span>{g.name}</span>
-                    </div>
-                  ))}
+                  <option value="">Select Genre</option>
+                  {/* div এবং span সরিয়ে সরাসরি option ট্যাগ ব্যবহার করুন */}
+                  {genres &&
+                    genres.map((g) => (
+                      <option key={g._id} value={g.name}>
+                        {g.name}
+                      </option>
+                    ))}
                 </select>
               </div>
               <input
@@ -978,6 +987,92 @@ export default function Dashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- BOOK DETAILS MODAL --- */}
+      {isDetailsOpen && selectedBook && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-[32px] w-full max-w-2xl overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="flex justify-between items-center p-6 border-b">
+              <h2 className="text-xl font-bold text-[#4A3728]">
+                Book Information
+              </h2>
+              <button
+                onClick={() => setIsDetailsOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex flex-col md:flex-row p-6 gap-8 max-h-[70vh] overflow-y-auto">
+              {/* Cover Image */}
+              <div className="w-full md:w-2/5">
+                <img
+                  src={selectedBook.coverImage}
+                  alt={selectedBook.title}
+                  className="w-full h-80 object-cover rounded-[24px] shadow-lg"
+                />
+              </div>
+
+              {/* Info Content */}
+              <div className="flex-1 space-y-4">
+                <div>
+                  <h3 className="text-2xl font-black text-gray-800">
+                    {selectedBook.title}
+                  </h3>
+                  <p className="text-[#4A3728] font-bold italic">
+                    {selectedBook.author}
+                  </p>
+                </div>
+
+                <div className="flex gap-4 text-xs font-bold uppercase text-gray-500">
+                  <span className="bg-gray-100 px-3 py-1 rounded-full">
+                    {selectedBook.genre}
+                  </span>
+                  <span className="bg-yellow-50 text-yellow-600 px-3 py-1 rounded-full">
+                    ★ {selectedBook.avgRating || 0}
+                  </span>
+                </div>
+
+                <div className="bg-[#F1F3F6] p-5 rounded-[20px]">
+                  <p className="text-xs text-gray-400 font-bold uppercase mb-2">
+                    Description
+                  </p>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    {selectedBook.description}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-gray-50 flex gap-3">
+              <button
+                onClick={() => {
+                  setFormData(selectedBook);
+                  setIsEditing(true);
+                  setIsDetailsOpen(false);
+                  setEditId(selectedBook._id);
+                  setShowModal(true);
+                }}
+                className="flex-1 bg-[#4A3728] text-white py-3 rounded-xl font-bold hover:opacity-90 transition-all"
+              >
+                Edit Book
+              </button>
+
+              <button
+                onClick={() => {
+                  handleDeleteGenre(selectedBook._id);
+                  setIsDetailsOpen(false);
+                }}
+                className="flex-1 bg-red-50 text-red-600 border border-red-200 py-3 rounded-xl font-bold hover:bg-red-50 transition-all"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

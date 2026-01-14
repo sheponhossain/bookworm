@@ -10,7 +10,7 @@ export default function RegisterPage() {
     email: '',
     password: '',
     photoURL: '',
-    role: 'user', // ডিফল্ট রোল
+    role: 'user',
   });
   const [loading, setLoading] = useState(false);
   const router = useRouter();

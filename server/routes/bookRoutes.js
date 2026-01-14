@@ -1,16 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const Book = require('../models/Book');
-const User = require('../models/User'); // ইউজার মডেলটি ইম্পোর্ট করতে হবে
-const Tutorial = require('../models/Tutorial'); // টিউটোরিয়াল মডেল (নিচে স্কিমা বলে দিচ্ছি)
+const User = require('../models/User');
+const Tutorial = require('../models/Tutorial');
 const { adminOnly } = require('../middlewares/auth');
-// const Book = require('../models/Book');
 
-// ---------------------------------------------------------
-// ১. সবার জন্য উন্মুক্ত রাউট (Public Routes)
-// ---------------------------------------------------------
-
-/** @desc সব বইয়ের লিস্ট পাওয়া */
 router.get('/all', async (req, res) => {
   try {
     const { page = 1, limit = 15, genre = 'All' } = req.query;
@@ -26,7 +20,6 @@ router.get('/all', async (req, res) => {
       .limit(parseInt(limit));
 
     const booksWithRating = books.map((book) => {
-      // ডকুমেণ্ট অনুযায়ী শুধুমাত্র 'approved' রিভিউগুলো এভারেজ রেটিংয়ে আসবে
       const approvedReviews = book.reviews
         ? book.reviews.filter((r) => r.status === 'approved')
         : [];
@@ -41,7 +34,7 @@ router.get('/all', async (req, res) => {
 
       return {
         ...book._doc,
-        reviews: approvedReviews, // পাবলিকলি শুধু অ্যাপ্রুভড রিভিউ দেখাবে
+        reviews: approvedReviews,
         avgRating: Number(avgRating),
         totalReviews: totalReviews,
       };
@@ -57,11 +50,10 @@ router.get('/all', async (req, res) => {
   }
 });
 
-/** @desc স্ট্যাটস ডাটা পাওয়া */
 router.get('/stats', async (req, res) => {
   try {
     const totalBooks = await Book.countDocuments();
-    const activeUsers = await User.countDocuments(); // রিয়েল ইউজার কাউন্ট
+    const activeUsers = await User.countDocuments();
     const books = await Book.find();
     let totalReviews = 0;
     books.forEach((b) => (totalReviews += b.reviews ? b.reviews.length : 0));
@@ -76,10 +68,6 @@ router.get('/stats', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// ---------------------------------------------------------
-// ২. বুক ম্যানেজমেন্ট (Admin Only)
-// ---------------------------------------------------------
 
 router.post('/add', adminOnly, async (req, res) => {
   try {
@@ -109,11 +97,6 @@ router.delete('/:id', adminOnly, async (req, res) => {
   }
 });
 
-// ---------------------------------------------------------
-// ৩. ইউজার ম্যানেজমেন্ট (Admin Only) - NEW
-// ---------------------------------------------------------
-
-/** @desc সব ইউজারের লিস্ট দেখা */
 router.get('/admin/users', adminOnly, async (req, res) => {
   try {
     const users = await User.find().select('-password');
@@ -123,7 +106,6 @@ router.get('/admin/users', adminOnly, async (req, res) => {
   }
 });
 
-/** @desc রোল পরিবর্তন করা (Promote/Demote) */
 router.put('/admin/users/:id/role', adminOnly, async (req, res) => {
   try {
     const { role } = req.body;
@@ -134,14 +116,8 @@ router.put('/admin/users/:id/role', adminOnly, async (req, res) => {
   }
 });
 
-// ---------------------------------------------------------
-// ৪. রিভিউ সিস্টেম ও মডারেশন - UPDATED
-// ---------------------------------------------------------
-
-// অ্যাডমিন প্যানেলে পেন্ডিং রিভিউ দেখানোর রাউট
 router.get('/reviews/pending', async (req, res) => {
   try {
-    // সব বইয়ের ভেতর থেকে শুধু 'pending' স্ট্যাটাসের রিভিউগুলো বের করা
     const books = await Book.find({ 'reviews.status': 'pending' });
 
     let pendingReviews = [];
@@ -242,11 +218,10 @@ router.post('/:bookId/review', async (req, res) => {
   }
 });
 
-// Review Approve korar backend route
 router.put('/reviews/:reviewId/approve', async (req, res) => {
   try {
     const { reviewId } = req.params;
-    // Database-e oi review-ti khuje tar status 'approved' kora
+
     const updatedBook = await Book.findOneAndUpdate(
       { 'reviews._id': reviewId },
       { $set: { 'reviews.$.status': 'approved' } },
@@ -260,8 +235,6 @@ router.put('/reviews/:reviewId/approve', async (req, res) => {
     res.status(500).json({ message: 'Server Error' });
   }
 });
-//নতুন কোডটি এখানে বসান (রিভিউ পাওয়ার জন্য) ---
-// ইউজার যখন রিভিউ দিবে
 router.post('/:id/review', async (req, res) => {
   try {
     const book = await Book.findById(req.params.id);
@@ -272,7 +245,7 @@ router.post('/:id/review', async (req, res) => {
       userName: req.body.userName,
       rating: req.body.rating,
       comment: req.body.comment,
-      status: 'pending', // ড্যাশবোর্ডে দেখানোর জন্য এটি জরুরি
+      status: 'pending',
       createdAt: new Date(),
     };
 
@@ -283,9 +256,6 @@ router.post('/:id/review', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// ---------------------------------------------------------
-// ৫. টিউটোরিয়াল ম্যানেজমেন্ট (YouTube Embed) - NEW
-// ---------------------------------------------------------
 
 router.get('/tutorials', async (req, res) => {
   try {

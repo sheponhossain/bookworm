@@ -9,7 +9,6 @@ export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  // ফর্ম স্টেট
   const [formData, setFormData] = useState({
     displayName: '',
     photoURL: '',
@@ -17,7 +16,6 @@ export default function ProfilePage() {
   });
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // ইউজার লগইন না থাকলে রিডাইরেক্ট
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/auth/login');
@@ -35,10 +33,7 @@ export default function ProfilePage() {
     setIsUpdating(true);
 
     try {
-      // এখানে আপনার ব্যাকএন্ড বা ফায়ারবেস আপডেট লজিক বসবে
-      // উদাহরণ: await updateProfile(user, { displayName: formData.displayName, photoURL: formData.photoURL });
-
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // সিমুলেশন
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       toast.success('Profile updated successfully! ✨', {
         style: { borderRadius: '15px', background: '#4A3728', color: '#fff' },
       });

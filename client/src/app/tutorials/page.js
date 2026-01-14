@@ -11,15 +11,12 @@ export default function TutorialsPage() {
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // অ্যাডমিন চেক (ইমেইল দিয়ে করা নিরাপদ)
   const isAdmin = user?.email === 'admin@gmail.com' || user?.role === 'admin';
 
-  // --- ডাটাবেস থেকে ভিডিও লোড করা ---
   useEffect(() => {
     const fetchVideos = async () => {
       try {
         const res = await axios.get('http://localhost:5000/api/tutorials');
-        // আপনার এপিআই যদি সরাসরি অ্যারে পাঠায় তবে res.data, আর যদি অবজেক্টে পাঠায় তবে res.data.tutorials
         const data = Array.isArray(res.data)
           ? res.data
           : res.data.tutorials || [];
@@ -33,8 +30,6 @@ export default function TutorialsPage() {
     fetchVideos();
   }, []);
 
-  // YouTube URL-কে Embed URL-এ রূপান্তর
-  // URL কনভার্টার ফাংশন (এটি ফ্রন্টএন্ড ফাইলের ভেতরে রাখুন)
   const getEmbedUrl = (url) => {
     if (!url) return null;
     const regExp =
@@ -42,10 +37,9 @@ export default function TutorialsPage() {
     const match = url.match(regExp);
     return match && match[2].length === 11
       ? `https://www.youtube.com/embed/${match[2]}`
-      : url; // অলরেডি এমবেড লিঙ্ক থাকলে সেটাই রিটার্ন করবে
+      : url;
   };
 
-  // --- ভিডিও যোগ করা (Admin Only) ---
   const handleAddVideo = async (e) => {
     e.preventDefault();
     const embedUrl = getEmbedUrl(newVideo.url);
@@ -58,7 +52,6 @@ export default function TutorialsPage() {
         tag: 'Admin Pick',
       };
 
-      // ব্যাকএন্ডে সেভ করা
       const res = await axios.post(
         'http://localhost:5000/api/tutorials/add',
         videoData
@@ -74,7 +67,6 @@ export default function TutorialsPage() {
     }
   };
 
-  // --- ভিডিও ডিলিট করা (Admin Only) ---
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this tutorial?'))
       return;

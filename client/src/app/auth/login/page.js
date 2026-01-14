@@ -24,9 +24,9 @@ export default function LoginPage() {
       const userRole = res.data.user.role;
 
       if (userRole === 'admin') {
-        window.location.assign('/dashboard'); // router.push এর বদলে এটি ব্যবহার করুন
+        window.location.assign('/dashboard');
       } else {
-        window.location.assign('/my-library'); // সাধারণ ইউজারদের জন্য
+        window.location.assign('/my-library');
       }
     } catch (err) {
       alert(err.response?.data?.message || 'Login failed!');

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import toast, { Toaster } from 'react-hot-toast';
-import ReaderView from '@/components/ReaderView'; // ReaderView ইমপোর্ট করা হয়েছে
+import ReaderView from '@/components/ReaderView';
 
 export default function AllBooksPage() {
   const { user } = useAuth();
@@ -15,7 +15,6 @@ export default function AllBooksPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const booksPerPage = 8;
 
-  // --- নতুন স্টেট ReaderView এর জন্য ---
   const [selectedBook, setSelectedBook] = useState(null);
   const [isReading, setIsReading] = useState(false);
 
@@ -40,17 +39,13 @@ export default function AllBooksPage() {
     fetchBooks();
   }, []);
 
-  // --- Start Reading লজিক ---
   const handleStartReading = (book) => {
-    // ১. লোকাল স্টোরেজে Currently Reading হিসেবে সেভ করা
     const bookData = {
       ...book,
       status: 'Currently Reading',
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(`book_shelf_${book._id}`, JSON.stringify(bookData));
-
-    // ২. ReaderView ওপেন করা
     setSelectedBook(book);
     setIsReading(true);
 
@@ -91,14 +86,9 @@ export default function AllBooksPage() {
       </div>
     );
 
-  // --- ReaderView কন্ডিশনাল রেন্ডারিং ---
   if (isReading && selectedBook) {
     return (
-      <ReaderView
-        book={selectedBook}
-        onBack={() => setIsReading(false)}
-        // আপনি চাইলে এখানে onShelfChange লজিকও দিতে পারেন
-      />
+      <ReaderView book={selectedBook} onBack={() => setIsReading(false)} />
     );
   }
 

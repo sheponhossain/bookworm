@@ -9,9 +9,8 @@ export default function ReaderView({ book, onBack, onShelfChange }) {
   const [fontSize, setFontSize] = useState(18);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [secondsRead, setSecondsRead] = useState(0);
-  const [isFinished, setIsFinished] = useState(false); // [ADD] বই শেষ ট্র্যাকিং
+  const [isFinished, setIsFinished] = useState(false);
 
-  // --- রিভিউ এবং রেটিং স্টেট ---
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
@@ -25,30 +24,19 @@ export default function ReaderView({ book, onBack, onShelfChange }) {
     return 1;
   });
 
-  const totalPages = 10; // [UPDATE] ১০০ থেকে ১০ করা হলো
+  const totalPages = 10;
   const progressPercent = Math.round((currentPage / totalPages) * 100);
 
-  // --- এপ্রুভড রিভিউ ডাটাবেস থেকে স্থায়ীভাবে লোড করা ---
   useEffect(() => {
-    const fetchReviews = async () => {
-      if (!book?._id) return;
-      try {
-        const res = await axios.get(
-          `http://localhost:5000/api/books/${book._id}/reviews`
-        );
-        const allReviews = Array.isArray(res.data)
-          ? res.data
-          : res.data.reviews || [];
-
-        // শুধু 'approved' রিভিউগুলো ফিল্টার
-        const approved = allReviews.filter((rev) => rev.status === 'approved');
-        setApprovedReviews(approved);
-      } catch (err) {
-        console.error('Failed to load permanent reviews:', err);
-      }
-    };
-    fetchReviews();
-  }, [book._id]);
+    if (book && book.reviews) {
+      const approved = book.reviews.filter(
+        (rev) => rev.status && rev.status.toLowerCase().trim() === 'approved'
+      );
+      setApprovedReviews(approved);
+    } else {
+      setApprovedReviews([]);
+    }
+  }, [book]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -69,7 +57,7 @@ export default function ReaderView({ book, onBack, onShelfChange }) {
         rating: reviewRating,
         comment: reviewComment,
         bookTitle: book.title,
-        status: 'pending', // অ্যাডমিন প্যানেলে জমা হবে
+        status: 'pending',
       });
       toast.success('Review sent for approval! ✨');
       setReviewComment('');
@@ -89,7 +77,7 @@ export default function ReaderView({ book, onBack, onShelfChange }) {
 
   const handleNextPage = () => {
     if (currentPage >= totalPages) {
-      setIsFinished(true); // [ADD] ১০ নম্বর পেজে ক্লিক করলে ফিনিশ হবে
+      setIsFinished(true);
       if (onShelfChange) onShelfChange(book._id, 'Read');
       return;
     }
@@ -212,7 +200,6 @@ export default function ReaderView({ book, onBack, onShelfChange }) {
             style={{ fontSize: `${fontSize}px`, lineHeight: '1.8' }}
           >
             {isFinished ? (
-              /* --- [ADD] সুন্দর এন্ড পেজ যা আপনার ডিজাইন মেনে চলে --- */
               <div className="flex flex-col items-center justify-center text-center py-20 animate-in fade-in zoom-in duration-1000">
                 <div className="w-24 h-24 bg-[#C1A88D]/20 rounded-full flex items-center justify-center mb-8 text-6xl">
                   🏆
@@ -222,9 +209,7 @@ export default function ReaderView({ book, onBack, onShelfChange }) {
                 </h1>
                 <p className="font-serif text-xl mb-10 opacity-90">
                   Congratulations! You have completed <br />{' '}
-                  <span className="font-bold text-[#C1A88D]">
-                    "{book.title}"
-                  </span>
+                  <span className="font-bold text-[#C1A88D]">{book.title}</span>
                 </p>
                 <p className="text-sm uppercase tracking-[4px] opacity-50 mb-12">
                   Total Time: {formatTime(secondsRead)}
