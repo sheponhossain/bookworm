@@ -11,12 +11,18 @@ export default function MyLibraryPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [savedBooks, setSavedBooks] = useState([]);
-  const [dbStats, setDbStats] = useState({ annualGoal: 50, readingStreak: 0 });
+
+  // dbStats এর বদলে localStats ব্যবহার করছি
+  const [localStats, setLocalStats] = useState({
+    annualGoal: 50,
+    readingStreak: 0,
+  });
+
   const [loading, setLoading] = useState(true);
   const [selectedBook, setSelectedBook] = useState(null);
   const [isReading, setIsReading] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+  const [tempGoal, setTempGoal] = useState(50);
 
   const statusOptions = ['Want to Read', 'Currently Reading', 'Read'];
 
@@ -26,7 +32,7 @@ export default function MyLibraryPage() {
       (b) => b.status === 'Currently Reading'
     );
 
-    const annualGoal = dbStats.annualGoal || 50;
+    const annualGoal = localStats.annualGoal || 50;
     const progress = Math.min(
       Math.round((readBooks.length / annualGoal) * 100),
       100
@@ -42,71 +48,40 @@ export default function MyLibraryPage() {
       value: genreMap[name],
     }));
 
-    const totalPages = readBooks.reduce(
-      (acc, book) => acc + (book.pageCount || 250),
-      0
-    );
-
     return {
       annualGoal,
       readCount: readBooks.length,
       progress,
       genreData,
-      totalPages,
+      totalPages: readBooks.reduce(
+        (acc, book) => acc + (book.pageCount || 250),
+        0
+      ),
       currentCount: currentlyReading.length,
-      streak: dbStats.readingStreak || 0,
+      streak: localStats.readingStreak || 0,
     };
-  }, [savedBooks, dbStats]);
+  }, [savedBooks, localStats]);
 
   const COLORS = ['#4A3728', '#C1A88D', '#E5DCC3', '#D4C3A3', '#8B735B'];
 
-  // --- API FUNCTIONS ---
-  const fetchStatsFromDB = async () => {
-    if (!user?.email) return;
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/stats/${user.email}`
-      );
-      const data = await res.json();
-      if (data) setDbStats(data);
-    } catch (err) {
-      console.error('Stats fetch error:', err);
+  // --- লোকালস্টোরেজ থেকে গোল এবং স্ট্যাটাস লোড করা ---
+  const loadLocalStats = () => {
+    const savedGoal = localStorage.getItem('user_reading_goal');
+    if (savedGoal) {
+      const goalValue = parseInt(savedGoal);
+      setLocalStats((prev) => ({ ...prev, annualGoal: goalValue }));
+      setTempGoal(goalValue);
     }
   };
 
-  // ১. গোল আপডেট করার নতুন ফাংশন (ডিজাইন চেঞ্জ না করে যোগ করা হয়েছে)
-  const handleGoalUpdate = async () => {
-    const newGoal = prompt(
-      'Set your new annual reading goal:',
-      stats.annualGoal
-    );
-    if (newGoal && !isNaN(newGoal)) {
-      try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/stats/update-goal`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: user.email,
-              newGoal: parseInt(newGoal),
-            }),
-          }
-        );
-        if (response.ok) {
-          fetchStatsFromDB();
-          toast.success(`Goal updated to ${newGoal} books!`, {
-            style: {
-              borderRadius: '15px',
-              background: '#4A3728',
-              color: '#fff',
-            },
-          });
-        }
-      } catch (error) {
-        toast.error('Failed to update goal');
-      }
-    }
+  // --- গোল আপডেট করার ফাংশন (LocalStorage) ---
+  const saveNewGoal = () => {
+    localStorage.setItem('user_reading_goal', tempGoal.toString());
+    setLocalStats((prev) => ({ ...prev, annualGoal: tempGoal }));
+    setIsGoalModalOpen(false);
+    toast.success(`Goal updated to ${tempGoal} books! 🎯`, {
+      style: { borderRadius: '15px', background: '#4A3728', color: '#fff' },
+    });
   };
 
   const fetchMyLibrary = () => {
@@ -124,15 +99,14 @@ export default function MyLibraryPage() {
   };
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/auth/login');
-    }
+    if (!authLoading && !user) router.push('/auth/login');
     if (user) {
       fetchMyLibrary();
-      //   fetchStatsFromDB();
+      loadLocalStats(); // ডেটাবেসের বদলে লোকাল থেকে লোড
     }
   }, [user, authLoading, router]);
 
+  // স্ট্যাটাস আপডেট লজিক
   const updateStatus = (id, newStatus) => {
     const updatedBooks = savedBooks.map((book) => {
       if (book._id === id) {
@@ -144,12 +118,7 @@ export default function MyLibraryPage() {
     });
     setSavedBooks(updatedBooks);
     toast.success(`Moved to ${newStatus}`, {
-      style: {
-        borderRadius: '15px',
-        background: '#4A3728',
-        color: '#fff',
-        fontSize: '12px',
-      },
+      style: { borderRadius: '15px', background: '#4A3728', color: '#fff' },
     });
   };
 
@@ -157,98 +126,64 @@ export default function MyLibraryPage() {
     setSavedBooks(savedBooks.filter((book) => book._id !== id));
     localStorage.removeItem(`book_shelf_${id}`);
     toast.error('Removed from shelf', {
-      icon: '🗑️',
       style: { borderRadius: '15px', background: '#4A3728', color: '#fff' },
     });
   };
 
-  const handleRead = (book) => {
-    setSelectedBook(book);
-    setIsReading(true);
-  };
-
-  if (authLoading || loading) {
+  if (authLoading || loading)
     return (
-      <div className="h-screen flex items-center justify-center font-serif italic text-2xl bg-[#FDFBF7]">
-        <div className="animate-pulse text-[#4A3728]">
-          Curating your personal shelf...
-        </div>
+      <div className="h-screen flex items-center justify-center bg-[#FDFBF7] font-serif text-[#4A3728]">
+        Curating your shelf...
       </div>
     );
-  }
-
-  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-[#4A3728] p-8 md:p-12">
       <Toaster position="bottom-right" />
 
-      {isReading && selectedBook && (
+      {isReading && selectedBook ? (
         <ReaderView
           book={selectedBook}
           onBack={() => {
             setIsReading(false);
-            fetchMyLibrary(); // fetch again to reflect updated status
+            fetchMyLibrary();
           }}
-          onShelfChange={updateStatus} // <-- এইটা ReaderView থেকে status আপডেটের জন্য
+          onShelfChange={updateStatus}
         />
-      )}
-
-      {!isReading && (
+      ) : (
         <>
+          {/* Header */}
           <header className="max-w-7xl mx-auto mb-16 flex flex-col md:flex-row justify-between items-end gap-6">
             <div>
               <h1 className="text-5xl font-serif font-bold mb-2">
                 My Personal <span className="italic text-[#C1A88D]">Shelf</span>
               </h1>
               <p className="text-gray-400 font-medium uppercase text-[10px] tracking-[4px]">
-                Welcome back, {user.displayName || user.email?.split('@')[0]}
+                Welcome, {user.displayName || user.email?.split('@')[0]}
               </p>
             </div>
-            {user.photoURL && (
-              <img
-                src={user.photoURL}
-                className="w-16 h-16 rounded-full border-4 border-white shadow-lg object-cover"
-                alt="profile"
-              />
-            )}
-            <div className="w-1/2 md:w-auto">
-              {' '}
-              <button
-                onClick={() => {
-                  router.push('/my-library/analytics');
-                  setShowAnalytics(true);
-                }}
-                className={`w-full p-5 rounded-3xl border flex items-center justify-between group transition-all hover:shadow-lg active:scale-95 ${
-                  isDarkMode
-                    ? 'bg-[#252525] border-gray-800 hover:bg-[#2d2d2d]'
-                    : 'bg-white border-[#E5DCC3] hover:bg-[#FDFBF7]'
-                }`}
-              >
-                <div className="text-left">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-[#C1A88D]">
-                    Stats & Progress
-                  </p>
-                  <p className="text-sm font-bold">View Detailed Insights</p>
-                </div>
-                <span className="text-xl group-hover:translate-x-1 transition-transform">
-                  📈
-                </span>
-              </button>
-            </div>
+            <button
+              onClick={() => router.push('/my-library/analytics')}
+              className="bg-white border border-[#E5DCC3] p-5 rounded-3xl flex items-center gap-4 hover:shadow-lg transition-all shadow-sm"
+            >
+              <div className="text-left">
+                <p className="text-[9px] font-black uppercase text-[#C1A88D]">
+                  Insights
+                </p>
+                <p className="text-sm font-bold">Analytics</p>
+              </div>
+              <span className="text-xl">📈</span>
+            </button>
           </header>
 
           <section className="max-w-7xl mx-auto mb-20 grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* গোল কার্ড - এখানে onClick যুক্ত করা হয়েছে */}
+            {/* গোল কার্ড */}
             <div
-              onClick={handleGoalUpdate}
+              onClick={() => setIsGoalModalOpen(true)}
               className="bg-white rounded-[40px] p-8 border border-[#E5DCC3] flex flex-col items-center justify-center shadow-sm cursor-pointer hover:border-[#C1A88D] transition-all group"
             >
-              <h3 className="text-[10px] font-black uppercase tracking-widest mb-6 group-hover:text-[#C1A88D]">
-                2026 Reading Goal{' '}
-                <span className="opacity-0 group-hover:opacity-100 ml-2">
-                  ✎
-                </span>
+              <h3 className="text-[10px] font-black uppercase tracking-widest mb-6">
+                2026 Reading Goal <span className="text-[#C1A88D] ml-1">✎</span>
               </h3>
               <div className="relative w-44 h-44">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
@@ -283,15 +218,13 @@ export default function MyLibraryPage() {
                 </div>
               </div>
               <p className="mt-6 italic text-xs text-gray-400">
-                You have reached {stats.progress}% of your goal
+                Reached {stats.progress}% of your goal
               </p>
             </div>
 
+            {/* অন্যান্য স্ট্যাটাস */}
             <div className="lg:col-span-2 bg-white rounded-[40px] p-10 border border-[#E5DCC3] grid grid-cols-1 md:grid-cols-2 gap-10 shadow-sm">
               <div className="h-full min-h-[180px]">
-                <h4 className="text-[10px] font-black uppercase tracking-[3px] mb-6 text-[#C1A88D]">
-                  Reading Interests
-                </h4>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -312,137 +245,192 @@ export default function MyLibraryPage() {
                           stroke="none"
                         />
                       ))}
-                      {!stats.genreData.length && <Cell fill="#F8F5F0" />}
                     </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: '15px',
-                        border: 'none',
-                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
-                      }}
-                    />
+                    <Tooltip />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
               <div className="flex flex-col justify-center space-y-6">
-                {[
-                  {
-                    label: 'Total Pages',
-                    value: stats.totalPages.toLocaleString(),
-                    unit: 'pg',
-                  },
-                  {
-                    label: 'Currently Reading',
-                    value: stats.currentCount,
-                    unit: 'books',
-                  },
-                  {
-                    label: 'Reading Streak',
-                    value: stats.streak,
-                    unit: 'days',
-                  },
-                ].map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex justify-between items-end border-b border-[#F8F5F0] pb-3"
-                  >
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                      {item.label}
-                    </span>
-                    <span className="font-serif italic text-2xl">
-                      {item.value}{' '}
-                      <span className="text-[10px] not-italic font-bold text-[#C1A88D]">
-                        {item.unit}
-                      </span>
-                    </span>
-                  </div>
-                ))}
+                <StatRow
+                  label="Total Pages"
+                  value={stats.totalPages.toLocaleString()}
+                  unit="pg"
+                />
+                <StatRow
+                  label="Currently Reading"
+                  value={stats.currentCount}
+                  unit="books"
+                />
+                <StatRow label="Streak" value={stats.streak} unit="days" />
               </div>
             </div>
           </section>
 
+          {/* বুক শেলফ সেকশন */}
           <div className="max-w-7xl mx-auto space-y-16">
-            {statusOptions.map((shelfStatus) => {
-              const booksInShelf = savedBooks.filter(
-                (b) => b.status === shelfStatus
-              );
-              return (
-                <div key={shelfStatus} className="space-y-6">
-                  <div className="flex items-center gap-4">
-                    <h2 className="text-2xl font-serif font-bold opacity-80">
-                      {shelfStatus}
-                    </h2>
-                    <div className="h-[1px] flex-1 bg-[#E5DCC3]"></div>
-                    <span className="text-xs font-black bg-[#4A3728] text-white px-3 py-1 rounded-full">
-                      {booksInShelf.length}
-                    </span>
-                  </div>
-                  {booksInShelf.length === 0 ? (
-                    <div className="py-10 text-center border-2 border-dashed border-[#E5DCC3] rounded-[40px] italic text-gray-300">
-                      No books in this section yet.
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                      {booksInShelf.map((book) => (
-                        <div
-                          key={book._id}
-                          className="bg-white rounded-[40px] p-6 border border-[#E5DCC3] flex gap-6 hover:shadow-xl transition-all group relative"
-                        >
-                          <div className="w-28 h-40 flex-shrink-0 rounded-2xl overflow-hidden shadow-md bg-gray-100">
-                            <img
-                              src={book.coverImage}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                              alt={book.title}
-                            />
-                          </div>
-                          <div className="flex flex-col justify-between py-1 w-full overflow-hidden">
-                            <div>
-                              <h3 className="text-lg font-bold leading-tight truncate">
-                                {book.title}
-                              </h3>
-                              <p className="text-gray-400 text-xs italic mb-4">
-                                by {book.author}
-                              </p>
-                              <select
-                                value={book.status}
-                                onChange={(e) =>
-                                  updateStatus(book._id, e.target.value)
-                                }
-                                className="w-full bg-[#F8F5F0] border-none text-[#4A3728] text-[10px] font-bold py-2 px-3 rounded-xl outline-none cursor-pointer hover:bg-[#F1EFE9] transition-all mb-4"
-                              >
-                                {statusOptions.map((opt) => (
-                                  <option key={opt} value={opt}>
-                                    {opt}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="flex items-center gap-4">
-                              <button
-                                onClick={() => removeBook(book._id)}
-                                className="text-[9px] font-black uppercase tracking-widest text-red-300 hover:text-red-500 transition-colors"
-                              >
-                                ✕ Remove
-                              </button>
-                              {book.status !== 'Read' && (
-                                <button
-                                  onClick={() => handleRead(book)}
-                                  className="text-[9px] font-black uppercase tracking-widest text-[#C1A88D] hover:text-[#4A3728] transition-colors"
-                                >
-                                  📖 Read Now
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {statusOptions.map((shelfStatus) => (
+              <ShelfSection
+                key={shelfStatus}
+                status={shelfStatus}
+                books={savedBooks.filter((b) => b.status === shelfStatus)}
+                updateStatus={updateStatus}
+                removeBook={removeBook}
+                handleRead={setSelectedBook}
+                setIsReading={setIsReading}
+              />
+            ))}
           </div>
         </>
+      )}
+
+      {/* --- পপআপ (MODAL) --- */}
+      {isGoalModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[40px] p-10 max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-[#FDFBF7] border border-[#E5DCC3] rounded-2xl flex items-center justify-center text-3xl mx-auto mb-6">
+              🎯
+            </div>
+            <h3 className="text-2xl font-serif font-bold mb-2">Reading Goal</h3>
+            <p className="text-[#C1A88D] text-sm mb-8 italic">
+              Set your goal via LocalStorage
+            </p>
+
+            <div className="flex items-center justify-center gap-6 mb-10">
+              <button
+                onClick={() => setTempGoal(Math.max(1, tempGoal - 1))}
+                className="w-12 h-12 rounded-full border border-[#E5DCC3] text-2xl hover:bg-[#4A3728] hover:text-white transition-all"
+              >
+                -
+              </button>
+              <span className="text-4xl font-black text-[#4A3728]">
+                {tempGoal}
+              </span>
+              <button
+                onClick={() => setTempGoal(tempGoal + 1)}
+                className="w-12 h-12 rounded-full border border-[#E5DCC3] text-2xl hover:bg-[#4A3728] hover:text-white transition-all"
+              >
+                +
+              </button>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsGoalModalOpen(false)}
+                className="flex-1 py-4 rounded-2xl border border-[#E5DCC3] text-[10px] font-black uppercase tracking-widest"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveNewGoal}
+                className="flex-1 py-4 rounded-2xl bg-[#4A3728] text-white text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+              >
+                Update
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// সাব-কম্পোনেন্টসমূহ (বাকি কোড আপনার আগের মতোই আছে)
+function StatRow({ label, value, unit }) {
+  return (
+    <div className="flex justify-between items-end border-b border-[#F8F5F0] pb-3">
+      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+        {label}
+      </span>
+      <span className="font-serif italic text-2xl">
+        {value}{' '}
+        <span className="text-[10px] not-italic font-bold text-[#C1A88D]">
+          {unit}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function ShelfSection({
+  status,
+  books,
+  updateStatus,
+  removeBook,
+  handleRead,
+  setIsReading,
+}) {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <h2 className="text-2xl font-serif font-bold opacity-80">{status}</h2>
+        <div className="h-[1px] flex-1 bg-[#E5DCC3]"></div>
+        <span className="text-xs font-black bg-[#4A3728] text-white px-3 py-1 rounded-full">
+          {books.length}
+        </span>
+      </div>
+      {books.length === 0 ? (
+        <div className="py-10 text-center border-2 border-dashed border-[#E5DCC3] rounded-[40px] italic text-gray-300">
+          No books here yet.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {books.map((book) => (
+            <div
+              key={book._id}
+              className="bg-white rounded-[40px] p-6 border border-[#E5DCC3] flex gap-6 hover:shadow-xl transition-all group"
+            >
+              <div className="w-24 h-36 flex-shrink-0 rounded-2xl overflow-hidden shadow-md">
+                <img
+                  src={book.coverImage}
+                  className="w-full h-full object-cover"
+                  alt=""
+                />
+              </div>
+              <div className="flex flex-col justify-between w-full">
+                <div>
+                  <h3 className="text-base font-bold leading-tight truncate">
+                    {book.title}
+                  </h3>
+                  <p className="text-gray-400 text-[10px] italic mb-3">
+                    by {book.author}
+                  </p>
+                  <select
+                    value={book.status}
+                    onChange={(e) => updateStatus(book._id, e.target.value)}
+                    className="w-full bg-[#F8F5F0] text-[10px] font-bold py-2 px-2 rounded-xl outline-none cursor-pointer"
+                  >
+                    {['Want to Read', 'Currently Reading', 'Read'].map(
+                      (opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <button
+                    onClick={() => removeBook(book._id)}
+                    className="text-[9px] font-black uppercase text-red-300 hover:text-red-500"
+                  >
+                    ✕ Remove
+                  </button>
+                  {status !== 'Read' && (
+                    <button
+                      onClick={() => {
+                        handleRead(book);
+                        setIsReading(true);
+                      }}
+                      className="text-[9px] font-black uppercase text-[#C1A88D]"
+                    >
+                      📖 Read
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

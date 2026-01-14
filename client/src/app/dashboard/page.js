@@ -81,19 +81,17 @@ export default function Dashboard() {
         setGenres(genreRes.data);
       }
 
-      // --- রিভিউ ফিল্টার করার সঠিক লজিক ---
       const allPending = [];
 
       // সরাসরি fetchedBooks থেকে লুপ চালান
       fetchedBooks.forEach((book) => {
         if (book.reviews && Array.isArray(book.reviews)) {
           book.reviews.forEach((rev) => {
-            // যদি status 'pending' হয় অথবা status ফিল্ডই না থাকে
             if (rev.status === 'pending' || !rev.status) {
               allPending.push({
                 ...rev,
                 bookId: book._id,
-                bookTitle: book.title, // কার্ডে বইয়ের নাম দেখানোর জন্য
+                bookTitle: book.title,
               });
             }
           });
@@ -136,37 +134,59 @@ export default function Dashboard() {
     }
   };
 
-  const handleUpdateGenre = async (e) => {
+  const handleGenreSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.put(
-        `http://localhost:5000/api/genres/${genreToEdit}`,
-        { newName: newGenreInput.trim() },
-        { headers: { 'user-role': user.role } }
-      );
-
-      // জাস্ট নিচের লাইনগুলো কনফার্ম কর
-      setIsEditingGenre(false);
-      setGenreToEdit(null);
+      if (isEditingGenre) {
+        // আপডেট লজিক
+        await axios.put(`${API_URL}/genres/${genreToEdit}`, {
+          newName: newGenreInput,
+        });
+        toast.success('Genre updated successfully');
+      } else {
+        // অ্যাড লজিক
+        await axios.post(`${API_URL}/genres/add`, { name: newGenreInput });
+        toast.success('New genre added');
+      }
       setNewGenreInput('');
-      await fetchData(); // এটা মাস্ট দিবি যাতে লিস্ট রিফ্রেশ হয়
-      toast.success('Genre Updated!');
+      setIsEditingGenre(false);
+      fetchGenres(); // ডাটা রিফ্রেশ
     } catch (err) {
-      toast.error('Update failed');
+      toast.error('Operation failed');
     }
   };
 
   // --- DELETE FUNCTION ---
-  const handleDeleteBook = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this book?')) return;
+  const handleDeleteGenre = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this genre?')) return;
     try {
-      await axios.delete(`http://localhost:5000/api/books/${id}`, {
-        headers: { 'user-role': user.role },
-      });
-      toast.error('Book Deleted');
-      fetchData();
+      await axios.delete(`${API_URL}/genres/${id}`);
+      toast.success('Genre removed');
+      fetchGenres();
     } catch (err) {
-      toast.error('Delete failed');
+      toast.error('Failed to delete');
+    }
+  };
+  // পেন্ডিং রিভিউ লোড করা
+  const fetchPendingReviews = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/reviews/pending`);
+      setPendingReviews(res.data);
+    } catch (err) {
+      console.error('Error fetching reviews');
+    }
+  };
+  const moderateReview = async (reviewId, bookId, action) => {
+    try {
+      await axios.patch(`${API_URL}/admin/reviews/moderate`, {
+        reviewId,
+        bookId,
+        action,
+      });
+      toast.success(`Review ${action}d`);
+      fetchPendingReviews();
+    } catch (err) {
+      toast.error('Action failed');
     }
   };
 
@@ -202,7 +222,6 @@ export default function Dashboard() {
   });
 
   const categories = ['All', ...genres];
-  // --- ⭐ এই অংশটুকু এখানে যোগ করুন (Review Fetching Logic) ---
 
   // --- ADMIN ACTIONS ---
   const handleRoleChange = async (userId, newRole) => {
@@ -218,32 +237,6 @@ export default function Dashboard() {
       if (viewingUser) setViewingUser({ ...viewingUser, role: newRole });
     } catch (err) {
       toast.error('Role update failed');
-    }
-  };
-
-  const moderateReview = async (reviewId, bookId, action) => {
-    try {
-      const config = { headers: { 'user-role': user.role } };
-
-      if (action === 'approve') {
-        await axios.put(
-          `http://localhost:5000/api/books/${bookId}/reviews/${reviewId}/approve`,
-          {},
-          config
-        );
-        toast.success('Review Approved!');
-      } else {
-        await axios.delete(
-          `http://localhost:5000/api/admin/reviews/${bookId}/${reviewId}`,
-          config
-        );
-        toast.error('Review Deleted!');
-      }
-
-      // 🔥 instant UI update (no flicker)
-      setPendingReviews((prev) => prev.filter((r) => r._id !== reviewId));
-    } catch (err) {
-      toast.error('Action failed');
     }
   };
 
@@ -298,9 +291,13 @@ export default function Dashboard() {
   };
 
   const getYouTubeID = (url) => {
+    if (!url) return null;
+
     const regExp =
       /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
+
+    const match = String(url).match(regExp);
+
     return match && match[2].length === 11 ? match[2] : null;
   };
 
@@ -536,7 +533,6 @@ export default function Dashboard() {
               </div>
             </>
           )}
-
           {/* --- USER MANAGEMENT TAB --- */}
           {activeTab === 'user-mgmt' && user.role === 'admin' && (
             <div className="bg-white rounded-[40px] border border-[#E5DCC3] overflow-hidden shadow-sm">
@@ -603,8 +599,6 @@ export default function Dashboard() {
             </div>
           )}
           {/* --- MODERATION / REVIEWS TAB --- */}
-          {/* --- MODERATION / REVIEWS TAB --- */}
-          {/* --- MODERATION / REVIEWS TAB --- */}
           {activeTab === 'reviews' && user.role === 'admin' && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="mb-6">
@@ -636,7 +630,7 @@ export default function Dashboard() {
                           </div>
                         </div>
                         <p className="text-gray-600 text-sm italic leading-relaxed bg-[#FDFBF7] p-2 rounded-lg border border-dashed border-[#E5DCC3]">
-                          "{rev.comment}"
+                          {rev.comment}
                         </p>
                         <div className="flex items-center gap-2 mt-2">
                           <span className="text-[9px] font-black uppercase tracking-widest text-[#C1A88D]">
@@ -675,11 +669,77 @@ export default function Dashboard() {
                   <p className="text-gray-400 font-serif italic text-lg">
                     No reviews pending moderation
                   </p>
-                  <p className="text-[10px] uppercase tracking-[3px] text-gray-300 mt-2">
-                    Everything is up to date
-                  </p>
                 </div>
               )}
+            </div>
+          )}
+          {activeTab === 'genres' && user.role === 'admin' && (
+            <div className="bg-white p-10 rounded-[40px] border border-[#E5DCC3] shadow-sm max-w-2xl">
+              <h2 className="text-2xl font-serif font-bold mb-6">
+                Manage Genres
+              </h2>
+
+              <form onSubmit={handleGenreSubmit} className="flex gap-4 mb-8">
+                <input
+                  type="text"
+                  placeholder="Genre name"
+                  value={newGenreInput}
+                  onChange={(e) => setNewGenreInput(e.target.value)}
+                  className="flex-1 p-4 bg-[#F1F3F6] rounded-2xl outline-none font-medium"
+                  required
+                />
+                <button
+                  type="submit"
+                  className="bg-[#4A3728] text-white px-6 rounded-2xl font-bold"
+                >
+                  {isEditingGenre ? 'Update' : 'Add'}
+                </button>
+                {isEditingGenre && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditingGenre(false);
+                      setNewGenreInput('');
+                    }}
+                    className="bg-gray-100 text-gray-500 px-4 rounded-2xl"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </form>
+
+              <div className="space-y-3">
+                {genres.length === 0 ? (
+                  <p className="text-gray-400 italic">No genres found</p>
+                ) : (
+                  genres.map((g) => (
+                    <div
+                      key={g._id}
+                      className="flex justify-between items-center bg-[#FDFBF7] p-4 rounded-2xl border border-[#E5DCC3]"
+                    >
+                      <span className="font-bold">{g.name}</span>
+                      <div className="flex gap-4">
+                        <button
+                          onClick={() => {
+                            setIsEditingGenre(true);
+                            setGenreToEdit(g._id);
+                            setNewGenreInput(g.name);
+                          }}
+                          className="text-blue-600 font-bold text-sm hover:underline"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteGenre(g._id)}
+                          className="text-red-500 font-bold text-sm hover:underline"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
           {activeTab === 'tutorials' && (
@@ -735,81 +795,59 @@ export default function Dashboard() {
                 </form>
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {tutorials.map((tut) => (
-                  <div
-                    key={tut._id}
-                    className="bg-white rounded-[30px] overflow-hidden border border-[#E5DCC3] shadow-sm"
-                  >
-                    <iframe
-                      className="w-full aspect-video"
-                      src={`https://www.youtube.com/embed/${getYouTubeID(tut.videoUrl)}`}
-                      title={tut.title}
-                      allowFullScreen
-                    ></iframe>
-                    <div className="p-4 font-bold text-sm text-center">
-                      {tut.title}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+                {tutorials && tutorials.length > 0 ? (
+                  tutorials.map((tut) => {
+                    // ভিডিও আইডিটি আগে বের করে নিন
+                    const videoId = getYouTubeID(tut.url || tut.videoUrl);
 
-          {activeTab === 'genres' && user.role === 'admin' && (
-            <div className="bg-white p-10 rounded-[40px] border border-[#E5DCC3] shadow-sm max-w-2xl">
-              <h2 className="text-2xl font-serif font-bold mb-6">
-                Manage Genres
-              </h2>
-
-              <form
-                onSubmit={isEditingGenre ? handleUpdateGenre : handleAddGenre}
-                className="flex gap-4 mb-8"
-              >
-                <input
-                  type="text"
-                  placeholder="Genre name"
-                  value={newGenreInput}
-                  onChange={(e) => setNewGenreInput(e.target.value)}
-                  className="flex-1 p-4 bg-[#F1F3F6] rounded-2xl outline-none font-medium"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="bg-[#4A3728] text-white px-6 rounded-2xl font-bold"
-                >
-                  {isEditingGenre ? 'Update' : 'Add'}
-                </button>
-              </form>
-
-              <div className="space-y-3">
-                {genres.length === 0 ? (
-                  <p className="text-gray-400 italic">No genres found</p>
-                ) : (
-                  genres.map((g) => (
-                    <div
-                      key={g._id}
-                      className="flex justify-between items-center bg-[#FDFBF7] p-4 rounded-2xl border border-[#E5DCC3]"
-                    >
-                      <span className="font-bold">{g.name}</span>
-                      <button
-                        onClick={() => {
-                          setIsEditingGenre(true);
-                          setGenreToEdit(g._id);
-                          setNewGenreInput(g.name);
-                        }}
-                        className="text-blue-600 font-bold text-sm"
+                    return (
+                      <div
+                        key={tut._id}
+                        className="bg-white rounded-[30px] overflow-hidden border border-[#E5DCC3] shadow-sm group"
                       >
-                        Edit
-                      </button>
-                    </div>
-                  ))
+                        {videoId ? (
+                          <iframe
+                            className="w-full aspect-video"
+                            src={`https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`}
+                            title={tut.title}
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          ></iframe>
+                        ) : (
+                          <div className="w-full aspect-video bg-gray-100 flex items-center justify-center text-gray-400 italic text-xs">
+                            Video link unavailable
+                          </div>
+                        )}
+
+                        <div className="p-4">
+                          <h3 className="font-bold text-sm text-center line-clamp-2">
+                            {tut.title}
+                          </h3>
+
+                          {/* অ্যাডমিন ডিলিট বাটন (যদি প্রয়োজন হয়) */}
+                          {user?.role === 'admin' && (
+                            <button
+                              onClick={() => handleDelete(tut._id)}
+                              className="mt-2 w-full text-[10px] text-red-400 uppercase font-black hover:text-red-600 transition-colors"
+                            >
+                              Remove Tutorial
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="col-span-full text-center py-10 text-gray-400 italic">
+                    No tutorials found in the archive.
+                  </div>
                 )}
               </div>
             </div>
           )}
         </main>
       </div>
-
       {/* --- MODALS --- */}
       {viewingUser && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-[60] p-4">

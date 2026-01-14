@@ -2,8 +2,8 @@ const mongoose = require('mongoose');
 
 const tutorialSchema = new mongoose.Schema({
   title: { type: String, required: true },
-  videoUrl: { type: String, required: true }, // YouTube Link
-  addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  url: { type: String, required: true },
+  tag: { type: String, default: 'Admin Pick' },
   createdAt: { type: Date, default: Date.now },
 });
 

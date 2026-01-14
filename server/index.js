@@ -10,7 +10,7 @@ const app = express();
 // ২. ডাটাবেজ কানেক্ট
 connectDB();
 
-// ৩. মিডলওয়্যারগুলো
+// ৩. মিডলওয়্যারগুলো (অবশ্যই রাউটের আগে থাকতে হবে)
 app.use(
   cors({
     origin: 'http://localhost:3000',
@@ -18,9 +18,10 @@ app.use(
     allowedHeaders: ['Content-Type', 'user-role', 'Authorization'],
   })
 );
-app.use(express.json());
+app.use(express.json()); // এটি পোস্ট রিকোয়েস্টের ডেটা পড়ার জন্য জরুরি
 
-// --- ৪. মডেলগুলো ডিফাইন করা (FIXED: Genre Schema added) ---
+// ৪. মডেলগুলো ইমপোর্ট
+const Book = require('./models/Book');
 
 // UserStats Model
 const UserStats =
@@ -37,7 +38,7 @@ const UserStats =
     )
   );
 
-// Genre Model (এরর কমানোর জন্য এটি যোগ করা হয়েছে)
+// Genre Model
 const Genre =
   mongoose.models.Genre ||
   mongoose.model(
@@ -49,7 +50,7 @@ const Genre =
 
 // --- ৫. রাউট লজিক ---
 
-// স্ট্যাটস রাউট সরাসরি ডিফাইন করা
+// স্ট্যাটস রাউট
 app.get('/api/stats/:email', async (req, res) => {
   try {
     let stats = await UserStats.findOne({ userEmail: req.params.email });
@@ -74,7 +75,7 @@ app.patch('/api/stats/update-goal', async (req, res) => {
   }
 });
 
-// ১. সব জেনার পাওয়ার রাউট (FIXED: Genre is now defined)
+// জেনার রাউটস
 app.get('/api/genres', async (req, res) => {
   try {
     const genres = await Genre.find();
@@ -84,7 +85,6 @@ app.get('/api/genres', async (req, res) => {
   }
 });
 
-// ২. নতুন জেনার এড করার রাউট
 app.post('/api/genres/add', async (req, res) => {
   try {
     const newGenre = new Genre({ name: req.body.name });
@@ -95,7 +95,6 @@ app.post('/api/genres/add', async (req, res) => {
   }
 });
 
-// ৩. জেনার এডিট করার রাউট
 app.put('/api/genres/:oldName', async (req, res) => {
   try {
     const updatedGenre = await Genre.findOneAndUpdate(
@@ -108,6 +107,8 @@ app.put('/api/genres/:oldName', async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 });
+
+// রিভিউ রাউট
 app.post('/api/books/:id/review', async (req, res) => {
   const { userId, userName, rating, comment } = req.body;
   try {
@@ -119,7 +120,7 @@ app.post('/api/books/:id/review', async (req, res) => {
       userName,
       rating,
       comment,
-      status: 'pending', // default pending
+      status: 'pending',
     });
 
     await book.save();
@@ -154,7 +155,7 @@ app.get('/api/reviews/pending', async (req, res) => {
   }
 });
 
-// --- ৬. অন্যান্য রাউটগুলো ইমপোর্ট ও ব্যবহার করা ---
+// --- ৬. রাউট ফাইলগুলো ইমপোর্ট ও ব্যবহার ---
 const authRoutes = require('./routes/authRoutes');
 const bookRoutes = require('./routes/bookRoutes');
 const adminRoutes = require('./routes/adminRoutes');
@@ -163,10 +164,10 @@ const tutorialRoutes = require('./routes/tutorialRoutes');
 app.use('/api/auth', authRoutes);
 app.use('/api/books', bookRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/tutorials', tutorialRoutes);
+app.use('/api/tutorials', tutorialRoutes); // টিউটোরিয়াল এখন ডাটা পাবে
 
 app.get('/', (req, res) => res.send('Server is running'));
 
-// ৭. সার্ভার পোর্ট সেটআপ
+// ৭. সার্ভার পোর্ট
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server is running on port ${PORT}`));
